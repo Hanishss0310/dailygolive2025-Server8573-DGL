@@ -309,6 +309,10 @@ app.get("/api/analytics/summary", async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.send("🚀 DailyGo API is running");
+});
+
 // ---- Start Server ----
 app.listen(PORT, () => {
   console.log(`🚀 Secure DailyGo Server running on http://localhost:${PORT}`);
