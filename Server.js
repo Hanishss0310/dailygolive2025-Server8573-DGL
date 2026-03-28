@@ -31,7 +31,7 @@ app.use(
 );
 
 // ==========================================
-// 2. CORS (CRITICAL FIX: MOVED TO TOP)
+// 2. CORS (FIXED)
 // ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
@@ -45,24 +45,21 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, or preflight)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error("❌ Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Explicitly allow OPTIONS
-  allowedHeaders: ["Content-Type", "Authorization", "Accept"], // Required for JSON/Base64
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"],
   credentials: true,
 };
 
-// Apply CORS to all standard routes
 app.use(cors(corsOptions));
 
-// Explicitly handle preflight OPTIONS requests for all routes BEFORE other middleware
-app.options("*", cors(corsOptions));
-
+// ✅ FIXED LINE (THIS WAS CRASHING)
+app.options(/.*/, cors(corsOptions));
 
 // ==========================================
 // 3. BODY PARSERS
@@ -70,17 +67,15 @@ app.options("*", cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-
 // ==========================================
 // 4. DATA SANITIZATION
 // ==========================================
 app.use(
   mongoSanitize({
-    replaceWith: "_", // 🔥 prevents req.query crash
+    replaceWith: "_",
   })
 );
 app.use(hpp());
-
 
 // ==========================================
 // 5. RATE LIMITING
@@ -92,9 +87,8 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-
 // ==========================================
-// 6. STATIC UPLOADS & DB CONNECTION
+// 6. STATIC + DB
 // ==========================================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -102,7 +96,6 @@ mongoose
   .connect("mongodb://127.0.0.1:27017/dailygoDB")
   .then(() => console.log("✅ MongoDB Connected: dailygoDB"))
   .catch((err) => console.log("❌ Mongo Error:", err));
-
 
 // ==========================================
 // 7. ROUTES
@@ -115,24 +108,23 @@ app.use("/api/joinus", joinusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
 
-// ---- Root ----
+// ==========================================
+// 8. ROOT
+// ==========================================
 app.get("/", (req, res) => {
   res.send("🚀 DailyGo API running clean and secure");
 });
 
-
 // ==========================================
-// 8. GLOBAL ERROR HANDLER
+// 9. ERROR HANDLER
 // ==========================================
 app.use((err, req, res, next) => {
   console.error("🔥 Global Error:", err.message);
 
-  // Handle CORS error
   if (err.message === "❌ Not allowed by CORS") {
     return res.status(403).json({ error: "CORS origin rejected." });
   }
 
-  // Handle payload too large
   if (err.type === "entity.too.large") {
     return res.status(413).json({
       error: "Payload too large. Try reducing image size or use file upload.",
@@ -144,7 +136,9 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ---- Start ----
+// ==========================================
+// 10. START SERVER
+// ==========================================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
