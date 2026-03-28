@@ -5,7 +5,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
 
-// ---- NEW SECURITY IMPORTS ----
+// ---- SECURITY IMPORTS ----
 const mongoSanitize = require("express-mongo-sanitize");
 const hpp = require("hpp");
 
@@ -19,7 +19,7 @@ const galleryRoutes = require("./routes/galleryRoutes");
 const blogRoutes = require("./routes/blogRoutes");
 const joinusRoutes = require("./routes/joinusRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
-const productRoutes = require("./routes/productRoutes"); // Added Product Routes
+const productRoutes = require("./routes/productRoutes");
 
 // ---- Security: Headers ----
 app.use(
@@ -28,25 +28,25 @@ app.use(
   })
 );
 
-// ---- Rate Limiting ----
-// Limits requests from a single IP to 100 per 15 minutes to prevent DDoS/Brute Force
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: "Too many requests from this IP, please try again later."
-});
-app.use(limiter);
-
-// ---- Body Parsers (MODIFIED FOR IMAGES) ----
-// Increased from "10kb" to "50mb" to allow Base64 Product Images to pass through
+// ---- Body Parsers (FIXED POSITION) ----
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ---- Security: Data Sanitization ----
-// 1. Defend against NoSQL Injection (removes $ and . from req.body/query/params)
-app.use(mongoSanitize());
-// 2. Defend against HTTP Parameter Pollution
-app.use(hpp()); 
+// ---- Security: Data Sanitization (FIXED) ----
+app.use(
+  mongoSanitize({
+    replaceWith: "_", // 🔥 prevents req.query crash
+  })
+);
+app.use(hpp());
+
+// ---- Rate Limiting (MOVED BELOW SANITIZATION) ----
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: "Too many requests from this IP, please try again later.",
+});
+app.use(limiter);
 
 // ---- CORS ----
 const allowedOrigins = [
@@ -88,7 +88,7 @@ app.use("/api/gallery", galleryRoutes);
 app.use("/api/blogs", blogRoutes);
 app.use("/api/joinus", joinusRoutes);
 app.use("/api/analytics", analyticsRoutes);
-app.use("/api/products", productRoutes); // Initialized Product Routes
+app.use("/api/products", productRoutes);
 
 // ---- Root ----
 app.get("/", (req, res) => {
@@ -98,13 +98,22 @@ app.get("/", (req, res) => {
 // ---- Global Error Handler ----
 app.use((err, req, res, next) => {
   console.error("🔥 Global Error:", err.message);
-  
-  // Custom handling for CORS errors so they don't crash the server
+
+  // Handle CORS error
   if (err.message === "❌ Not allowed by CORS") {
     return res.status(403).json({ error: "CORS origin rejected." });
   }
 
-  res.status(500).json({ error: err.message || "Internal Server Error" });
+  // Handle payload too large
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({
+      error: "Payload too large. Try reducing image size or use file upload.",
+    });
+  }
+
+  res.status(500).json({
+    error: err.message || "Internal Server Error",
+  });
 });
 
 // ---- Start ----
