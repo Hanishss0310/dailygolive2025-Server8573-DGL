@@ -19,6 +19,8 @@ const blogRoutes = require("./routes/blogRoutes");
 const joinusRoutes = require("./routes/joinusRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const productRoutes = require("./routes/productRoutes");
+// Add the new Order route here
+const orderRoutes = require("./routes/orderRoutes"); 
 
 // ==========================================
 // 1. SECURITY HEADERS
@@ -103,6 +105,8 @@ app.use("/api/blogs", blogRoutes);
 app.use("/api/joinus", joinusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
+// Mount the new Order route
+app.use("/api/orders", orderRoutes);
 
 // ==========================================
 // 8. ROOT
