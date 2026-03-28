@@ -21,34 +21,18 @@ const joinusRoutes = require("./routes/joinusRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const productRoutes = require("./routes/productRoutes");
 
-// ---- Security: Headers ----
+// ==========================================
+// 1. SECURITY HEADERS
+// ==========================================
 app.use(
   helmet({
     crossOriginResourcePolicy: false,
   })
 );
 
-// ---- Body Parsers (FIXED POSITION) ----
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-// ---- Security: Data Sanitization (FIXED) ----
-app.use(
-  mongoSanitize({
-    replaceWith: "_", // 🔥 prevents req.query crash
-  })
-);
-app.use(hpp());
-
-// ---- Rate Limiting (MOVED BELOW SANITIZATION) ----
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: "Too many requests from this IP, please try again later.",
-});
-app.use(limiter);
-
-// ---- CORS ----
+// ==========================================
+// 2. CORS (CRITICAL FIX: MOVED TO TOP)
+// ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
@@ -59,29 +43,70 @@ const allowedOrigins = [
   "https://dgl-core-9x7.dailygolive.in",
 ];
 
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or preflight)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("❌ Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Explicitly allow OPTIONS
+  allowedHeaders: ["Content-Type", "Authorization", "Accept"], // Required for JSON/Base64
+  credentials: true,
+};
+
+// Apply CORS to all standard routes
+app.use(cors(corsOptions));
+
+// Explicitly handle preflight OPTIONS requests for all routes BEFORE other middleware
+app.options("*", cors(corsOptions));
+
+
+// ==========================================
+// 3. BODY PARSERS
+// ==========================================
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+
+// ==========================================
+// 4. DATA SANITIZATION
+// ==========================================
 app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("❌ Not allowed by CORS"));
-      }
-    },
-    credentials: true,
+  mongoSanitize({
+    replaceWith: "_", // 🔥 prevents req.query crash
   })
 );
+app.use(hpp());
 
-// ---- Static Uploads ----
+
+// ==========================================
+// 5. RATE LIMITING
+// ==========================================
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: "Too many requests from this IP, please try again later.",
+});
+app.use(limiter);
+
+
+// ==========================================
+// 6. STATIC UPLOADS & DB CONNECTION
+// ==========================================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ---- MongoDB Connection ----
 mongoose
   .connect("mongodb://127.0.0.1:27017/dailygoDB")
   .then(() => console.log("✅ MongoDB Connected: dailygoDB"))
   .catch((err) => console.log("❌ Mongo Error:", err));
 
-// ---- Routes ----
+
+// ==========================================
+// 7. ROUTES
+// ==========================================
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/gallery", galleryRoutes);
@@ -95,7 +120,10 @@ app.get("/", (req, res) => {
   res.send("🚀 DailyGo API running clean and secure");
 });
 
-// ---- Global Error Handler ----
+
+// ==========================================
+// 8. GLOBAL ERROR HANDLER
+// ==========================================
 app.use((err, req, res, next) => {
   console.error("🔥 Global Error:", err.message);
 
