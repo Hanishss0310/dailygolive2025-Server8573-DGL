@@ -6,7 +6,6 @@ const rateLimit = require("express-rate-limit");
 const path = require("path");
 
 // ---- SECURITY IMPORTS ----
-const mongoSanitize = require("express-mongo-sanitize");
 const hpp = require("hpp");
 
 const app = express();
@@ -31,7 +30,7 @@ app.use(
 );
 
 // ==========================================
-// 2. CORS (FIXED)
+// 2. CORS
 // ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
@@ -58,7 +57,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// ✅ FIXED LINE (THIS WAS CRASHING)
+// ✅ FIXED (no more path-to-regexp error)
 app.options(/.*/, cors(corsOptions));
 
 // ==========================================
@@ -68,14 +67,11 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // ==========================================
-// 4. DATA SANITIZATION
+// 4. SECURITY (SAFE)
 // ==========================================
-app.use(
-  mongoSanitize({
-    replaceWith: "_",
-  })
-);
-app.use(hpp());
+app.use(hpp()); // keep this
+
+// ❌ REMOVED mongoSanitize (causing crash)
 
 // ==========================================
 // 5. RATE LIMITING
