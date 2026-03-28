@@ -23,7 +23,6 @@ const orderSchema = new mongoose.Schema(
       }
     ],
 
-    // ✅ MUST BE OBJECT (NOT STRING)
     payment: {
       method: String,
       type: String,
@@ -47,4 +46,5 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Order', orderSchema);
+// ✅ FIXED EXPORT (VERY IMPORTANT)
+module.exports = mongoose.models.Order || mongoose.model('Order', orderSchema);
