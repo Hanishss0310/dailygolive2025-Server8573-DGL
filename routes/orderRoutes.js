@@ -1,57 +1,83 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const fs = require('fs'); // ADDED: File System module
+const fs = require('fs');
 const Order = require('../models/Order');
 
 const router = express.Router();
 
-// --- MULTER STORAGE CONFIGURATION ---
+// ==========================================
+// 🔥 SAFE JSON PARSER (VERY IMPORTANT)
+// ==========================================
+const safeParse = (data) => {
+  try {
+    return JSON.parse(data);
+  } catch (err) {
+    console.log("JSON Parse Error:", err.message);
+    return {};
+  }
+};
+
+// ==========================================
+// MULTER CONFIG
+// ==========================================
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const dir = 'uploads/';
-    
-    // ADDED: Safety net to create the folder automatically if it's missing!
-    if (!fs.existsSync(dir)){
-        fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
-    
     cb(null, dir);
   },
   filename: function (req, file, cb) {
-    // Generates a unique filename: fieldname-timestamp-random.extension
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-' + Math.random();
     cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
   }
 });
 
-// Configure multer to accept specific fields
-const upload = multer({ 
+// 🔥 FILE FILTER (important)
+const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit per file
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only images allowed'), false);
+    }
+    cb(null, true);
+  }
 }).fields([
   { name: 'shopImage', maxCount: 1 },
   { name: 'screenshot', maxCount: 1 }
 ]);
 
-// --- CREATE ORDER ROUTE ---
+// ==========================================
+// CREATE ORDER
+// ==========================================
 router.post('/', upload, async (req, res) => {
   try {
-    // 1. Extract files
-    const shopImagePath = req.files && req.files['shopImage'] ? req.files['shopImage'][0].path : null;
-    const screenshotPath = req.files && req.files['screenshot'] ? req.files['screenshot'][0].path : null;
+    console.log("BODY:", req.body);
+    console.log("FILES:", req.files);
+
+    // FILES
+    const shopImagePath = req.files?.shopImage?.[0]?.path || null;
+    const screenshotPath = req.files?.screenshot?.[0]?.path || null;
 
     if (!shopImagePath) {
       return res.status(400).json({ error: "Shop Image is mandatory" });
     }
 
-    // 2. Parse the stringified JSON from the FormData payload
-    const customerDetails = JSON.parse(req.body.customerDetails);
-    const items = JSON.parse(req.body.items);
-    const payment = JSON.parse(req.body.payment);
-    const totals = JSON.parse(req.body.totals);
+    // 🔥 SAFE PARSE
+    const customerDetails = safeParse(req.body.customerDetails);
+    const items = safeParse(req.body.items);
+    const payment = safeParse(req.body.payment);
+    const totals = safeParse(req.body.totals);
 
-    // 3. Create the new Order document
+    // 🔥 VALIDATION
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "Items missing or invalid" });
+    }
+
+    // CREATE ORDER
     const newOrder = new Order({
       invoiceNo: req.body.invoiceNo,
       orderDate: req.body.orderDate,
@@ -64,23 +90,28 @@ router.post('/', upload, async (req, res) => {
         shopImage: shopImagePath,
         screenshot: screenshotPath
       }
-    }); 
+    });
 
-    // 4. Save to Database
     const savedOrder = await newOrder.save();
 
     res.status(201).json({
-      message: "Order successfully created and saved",
+      message: "Order saved successfully",
       order: savedOrder
     });
 
   } catch (error) {
-    console.error("Error creating order:", error);
-    res.status(500).json({ error: "Internal Server Error", details: error.message });
+    console.error("🔥 ORDER ERROR:", error);
+
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: error.message
+    });
   }
 });
 
-// --- GET ALL ORDERS ROUTE (For Admin Dashboard) ---
+// ==========================================
+// GET ORDERS
+// ==========================================
 router.get('/', async (req, res) => {
   try {
     const orders = await Order.find().sort({ createdAt: -1 });

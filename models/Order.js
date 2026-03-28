@@ -14,17 +14,15 @@ const orderSchema = new mongoose.Schema(
       fos: String
     },
 
-    // 🔥 FIX 1: allow string ID
     items: [
       {
-        id: mongoose.Schema.Types.Mixed, // ✅ FIXED
+        id: String, // ✅ FIXED (important)
         name: String,
         price: Number,
         qty: Number
       }
     ],
 
-    // 🔥 FIX 2: make payment OBJECT
     payment: {
       method: String,
       type: String,
