@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs'); // ADDED: File System module
 const Order = require('../models/Order');
 
 const router = express.Router();
@@ -8,7 +9,14 @@ const router = express.Router();
 // --- MULTER STORAGE CONFIGURATION ---
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Ensure this 'uploads' folder exists in your root directory!
+    const dir = 'uploads/';
+    
+    // ADDED: Safety net to create the folder automatically if it's missing!
+    if (!fs.existsSync(dir)){
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    cb(null, dir);
   },
   filename: function (req, file, cb) {
     // Generates a unique filename: fieldname-timestamp-random.extension
@@ -30,8 +38,8 @@ const upload = multer({
 router.post('/', upload, async (req, res) => {
   try {
     // 1. Extract files
-    const shopImagePath = req.files['shopImage'] ? req.files['shopImage'][0].path : null;
-    const screenshotPath = req.files['screenshot'] ? req.files['screenshot'][0].path : null;
+    const shopImagePath = req.files && req.files['shopImage'] ? req.files['shopImage'][0].path : null;
+    const screenshotPath = req.files && req.files['screenshot'] ? req.files['screenshot'][0].path : null;
 
     if (!shopImagePath) {
       return res.status(400).json({ error: "Shop Image is mandatory" });
@@ -56,7 +64,7 @@ router.post('/', upload, async (req, res) => {
         shopImage: shopImagePath,
         screenshot: screenshotPath
       }
-    });
+    }); 
 
     // 4. Save to Database
     const savedOrder = await newOrder.save();
