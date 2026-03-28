@@ -16,13 +16,14 @@ const orderSchema = new mongoose.Schema(
 
     items: [
       {
-        id: String, // ✅ FIXED (important)
+        id: String,
         name: String,
         price: Number,
         qty: Number
       }
     ],
 
+    // ✅ MUST BE OBJECT (NOT STRING)
     payment: {
       method: String,
       type: String,
