@@ -54,7 +54,7 @@ const upload = multer({
 ]);
 
 // ==========================================
-// 🔥 PDF GENERATOR HELPER FUNCTION
+// 🔥 PDF GENERATOR HELPER FUNCTION (BULLETPROOFED)
 // ==========================================
 const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
   return new Promise((resolve, reject) => {
@@ -70,7 +70,7 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
     doc.text('Bangalore, Karnataka - 560062');
     doc.text('Phone: 9739777166 | Email: office-info@dailygolive.in');
     
-    // 🔥 THE FIX: Changed 'Helvetica-Light' to 'Helvetica'
+    // 🔥 CRITICAL FIX: Changed 'Helvetica-Light' to standard 'Helvetica'
     doc.fontSize(24).font('Helvetica').text('INVOICE', 400, 50, { align: 'right' });
     doc.fontSize(10).text(`Invoice No: ${invoiceNo}`, 400, 80, { align: 'right' });
     doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 400, 95, { align: 'right' });
@@ -103,10 +103,15 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
     y += 25;
     doc.fillColor('#000000').font('Helvetica');
     orderData.items.forEach((item, i) => {
-      doc.text(item.name, 60, y, { width: 280 });
-      doc.text(item.qty.toString(), 350, y, { align: 'center', width: 50 });
-      doc.text(`Rs. ${item.price.toFixed(2)}`, 400, y, { align: 'right', width: 60 });
-      doc.text(`Rs. ${(item.price * item.qty).toFixed(2)}`, 470, y, { align: 'right', width: 70 });
+      // Safely parse numbers to prevent crashes
+      const price = Number(item.price) || 0;
+      const qty = Number(item.qty) || 0;
+      const amount = price * qty;
+
+      doc.text(item.name || 'Product', 60, y, { width: 280 });
+      doc.text(qty.toString(), 350, y, { align: 'center', width: 50 });
+      doc.text(`Rs. ${price.toFixed(2)}`, 400, y, { align: 'right', width: 60 });
+      doc.text(`Rs. ${amount.toFixed(2)}`, 470, y, { align: 'right', width: 70 });
       y += 20;
       doc.moveTo(50, y).lineTo(550, y).strokeColor('#eeeeee').stroke();
       y += 10;
@@ -115,21 +120,24 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
     // --- Totals ---
     y += 10;
     doc.font('Helvetica-Bold');
+    const subtotal = Number(orderData.totals?.subtotal) || 0;
     doc.text('Subtotal:', 350, y, { align: 'right', width: 110 });
-    doc.text(`Rs. ${orderData.totals?.subtotal?.toFixed(2) || '0.00'}`, 470, y, { align: 'right', width: 70 });
+    doc.text(`Rs. ${subtotal.toFixed(2)}`, 470, y, { align: 'right', width: 70 });
     y += 20;
     
-    if (orderData.totals?.discount > 0) {
+    const discount = Number(orderData.totals?.discount) || 0;
+    if (discount > 0) {
       doc.text('Discount:', 350, y, { align: 'right', width: 110 });
-      doc.text(`- Rs. ${orderData.totals?.discount?.toFixed(2)}`, 470, y, { align: 'right', width: 70 });
+      doc.text(`- Rs. ${discount.toFixed(2)}`, 470, y, { align: 'right', width: 70 });
       y += 20;
     }
 
     doc.moveTo(350, y).lineTo(550, y).strokeColor('#000000').stroke();
     y += 10;
     
+    const total = Number(orderData.totals?.total) || 0;
     doc.fontSize(12).text('TOTAL INVOICE:', 300, y, { align: 'right', width: 160 });
-    doc.text(`Rs. ${orderData.totals?.total?.toFixed(2) || '0.00'}`, 470, y, { align: 'right', width: 70 });
+    doc.text(`Rs. ${total.toFixed(2)}`, 470, y, { align: 'right', width: 70 });
 
     // --- Footer ---
     doc.fontSize(10).font('Helvetica').fillColor('#666666');
