@@ -19,50 +19,75 @@ const analyticsRoutes = require("./routes/analyticsRoutes");
 const productRoutes = require("./routes/productRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 
-// 1. Security
-app.use(helmet({ crossOriginResourcePolicy: false, crossOriginOpenerPolicy: false }));
+// ==========================================
+// 1. SECURITY HEADERS
+// ==========================================
+app.use(
+  helmet({
+    crossOriginResourcePolicy: false,
+  })
+);
 
+// ==========================================
 // 2. CORS
+// ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://dailygolive.in",
-  "https://www.dailygolive.in",
+  "https://www.dailygolive.in", // 🔥 IMPORTANT
   "https://dailygo-userside-app.firebaseapp.com",
   "https://dgl-core-9x7.dailygolive.in",
-  "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com",
 ];
 
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    const cleanOrigin = origin.replace(/\/$/, "");
-    if (allowedOrigins.includes(cleanOrigin)) return callback(null, true);
-    callback(new Error("CORS Blocked"));
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log("Blocked Origin:", origin);
+      callback(new Error("❌ Not allowed by CORS"));
+    }
   },
-  credentials: true
-}));
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
 
-// 3. Body Parser
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
+
+// ==========================================
+// 3. BODY PARSER
+// ==========================================
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// 4. Rate Limit (FIXED PATH)
+// ==========================================
+// 4. RATE LIMIT
+// ==========================================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
+  max: 100,
 });
-app.use("/api", limiter); // No trailing slash!
+app.use(limiter);
 
-// 5. Static Files
+// ==========================================
+// 5. STATIC FILES
+// ==========================================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// 6. DB
-mongoose.connect("mongodb://127.0.0.1:27017/dailygoDB")
+// ==========================================
+// 6. DATABASE
+// ==========================================
+mongoose
+  .connect("mongodb://127.0.0.1:27017/dailygoDB")
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.log("❌ DB Error:", err));
+  .catch((err) => console.log("❌ Mongo Error:", err));
 
-// 7. Routes (FIXED PATHS)
+// ==========================================
+// 7. ROUTES
+// ==========================================
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/gallery", galleryRoutes);
@@ -72,6 +97,46 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 
-app.get("/", (req, res) => res.send("API Running"));
+// ==========================================
+// 8. 🔥 APPLY HPP SAFELY (AFTER ROUTES)
+// ==========================================
+app.use(
+  hpp({
+    whitelist: ["sort", "filter"], // allow query params if needed
+  })
+);
 
-app.listen(PORT, () => console.log(`🚀 Running on port ${PORT}`));
+// ==========================================
+// 9. ROOT
+// ==========================================
+app.get("/", (req, res) => {
+  res.send("🚀 DailyGo API running");
+});
+
+// ==========================================
+// 10. ERROR HANDLER
+// ==========================================
+app.use((err, req, res, next) => {
+  console.error("🔥 Global Error:", err.message);
+
+  if (err.message === "❌ Not allowed by CORS") {
+    return res.status(403).json({ error: "CORS blocked" });
+  }
+
+  if (err.type === "entity.too.large") {
+    return res.status(413).json({
+      error: "File too large (max 50MB)",
+    });
+  }
+
+  res.status(500).json({
+    error: err.message || "Server Error",
+  });
+});
+
+// ==========================================
+// 11. START SERVER
+// ==========================================
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
