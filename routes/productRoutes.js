@@ -9,11 +9,12 @@ router.post("/", async (req, res) => {
   try {
     const newProduct = new Product(req.body);
     const savedProduct = await newProduct.save();
-
-    res.status(201).json(savedProduct); // ✅ FIXED
+    // ✅ Use return to ensure no further code executes
+    return res.status(201).json(savedProduct); 
   } catch (error) {
-    console.error("❌ CREATE ERROR:", error);
-    res.status(500).json({ error: error.message });
+    // ✅ Avoid colons in plain strings to be safe with path-to-regexp
+    console.error("CREATE_ERROR", error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -23,29 +24,28 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const products = await Product.find().sort({ createdAt: -1 });
-    res.status(200).json(products);
+    return res.status(200).json(products);
   } catch (error) {
-    console.error("❌ FETCH ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("FETCH_ERROR", error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
 // ==============================
 // UPDATE
 // ==============================
+// ✅ Ensure no space between ":" and "id"
 router.put("/:id", async (req, res) => {
   try {
     const updateData = { ...req.body };
 
-    // 🔥 IMPORTANT FIX
-    // If no new image sent → don't overwrite old image
     if (!updateData.image) {
       delete updateData.image;
     }
 
     const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      { $set: updateData }, // ✅ Use $set for cleaner Mongoose updates
       { new: true }
     );
 
@@ -53,10 +53,10 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    res.status(200).json(updatedProduct);
+    return res.status(200).json(updatedProduct);
   } catch (error) {
-    console.error("❌ UPDATE ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("UPDATE_ERROR", error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
@@ -65,16 +65,17 @@ router.put("/:id", async (req, res) => {
 // ==============================
 router.delete("/:id", async (req, res) => {
   try {
+    // ✅ Use req.params.id directly
     const deleted = await Product.findByIdAndDelete(req.params.id);
 
     if (!deleted) {
       return res.status(404).json({ error: "Product not found" });
     }
 
-    res.status(200).json({ message: "Product deleted successfully" });
+    return res.status(200).json({ message: "Product deleted successfully" });
   } catch (error) {
-    console.error("❌ DELETE ERROR:", error);
-    res.status(500).json({ error: error.message });
+    console.error("DELETE_ERROR", error.message);
+    return res.status(500).json({ error: error.message });
   }
 });
 
