@@ -46,7 +46,9 @@ const orderSchema = new mongoose.Schema(
 
     documents: {
       shopImage: String,
-      screenshot: String
+      screenshot: String,
+      // 🔥 THE FIX: Added invoicePdf so Mongoose knows to save it!
+      invoicePdf: String 
     }
   },
   { timestamps: true }
