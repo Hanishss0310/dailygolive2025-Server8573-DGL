@@ -25,7 +25,8 @@ const orderSchema = new mongoose.Schema(
 
     payment: {
       method: String,
-      type: String,
+      // ✅ FIX: This tells Mongoose you literally have a field named "type"
+      type: { type: String }, 
       amountPaid: Number,
       transactionId: String,
       balance: Number
