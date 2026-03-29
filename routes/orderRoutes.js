@@ -7,14 +7,26 @@ const Order = require('../models/Order');
 const router = express.Router();
 
 // ==========================================
-// 🔥 SAFE JSON PARSER (VERY IMPORTANT)
+// 🔥 SAFE JSON PARSER (FIXED)
 // ==========================================
 const safeParse = (data) => {
+  if (!data) return {};
+
   try {
     return JSON.parse(data);
   } catch (err) {
-    console.log("JSON Parse Error:", err.message);
-    return {};
+    console.log("⚠️ JSON Parse Error, fixing...", data);
+
+    try {
+      const fixed = data
+        .replace(/(\w+):/g, '"$1":')  // add quotes to keys
+        .replace(/'/g, '"');          // replace single quotes
+
+      return JSON.parse(fixed);
+    } catch (err2) {
+      console.log("❌ Still failed:", err2.message);
+      return {};
+    }
   }
 };
 
@@ -71,6 +83,9 @@ router.post('/', upload, async (req, res) => {
     const items = safeParse(req.body.items);
     const payment = safeParse(req.body.payment);
     const totals = safeParse(req.body.totals);
+
+    // 🔥 DEBUG (optional but useful)
+    console.log("PARSED PAYMENT:", payment);
 
     // 🔥 VALIDATION
     if (!Array.isArray(items) || items.length === 0) {
