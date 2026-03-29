@@ -9,6 +9,9 @@ const hpp = require("hpp");
 const app = express();
 const PORT = 4000;
 
+// ✅ FIX: Trust Nginx proxy (fixes rate-limit X-Forwarded-For error)
+app.set("trust proxy", 1);
+
 // ---- ROUTES ----
 const newsletterRoutes = require("./routes/newsletterRoutes");
 const contactRoutes = require("./routes/contactRoutes");
@@ -35,10 +38,11 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://dailygolive.in",
-  "https://www.dailygolive.in", // 🔥 IMPORTANT
+  "https://www.dailygolive.in",
   "https://dailygo-userside-app.firebaseapp.com",
   "https://dgl-core-9x7.dailygolive.in",
-  "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com",
+  "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com", // ✅ ADDED
+  "https://daily-fo26lbgolive-8-admin56-g.web.app",         // ✅ ADDED
 ];
 
 const corsOptions = {
@@ -99,11 +103,11 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 
 // ==========================================
-// 8. 🔥 APPLY HPP SAFELY (AFTER ROUTES)
+// 8. HPP (AFTER ROUTES)
 // ==========================================
 app.use(
   hpp({
-    whitelist: ["sort", "filter"], // allow query params if needed
+    whitelist: ["sort", "filter"],
   })
 );
 
