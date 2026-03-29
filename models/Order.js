@@ -46,5 +46,4 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// ✅ FIXED EXPORT (VERY IMPORTANT)
-module.exports = mongoose.models.Order || mongoose.model('Order', orderSchema);
+module.exports = mongoose.model('Order', orderSchema);
