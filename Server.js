@@ -24,13 +24,13 @@ const orderRoutes = require("./routes/orderRoutes");
 // ==========================================
 app.use(
   helmet({
-    crossOriginResourcePolicy: false, // Required to serve images
-    crossOriginOpenerPolicy: false,   // Prevents issues with Firebase/Popups
+    crossOriginResourcePolicy: false, 
+    crossOriginOpenerPolicy: false,   
   })
 );
 
 // ==========================================
-// 2. CORS CONFIGURATION (FIXED)
+// 2. CORS CONFIGURATION
 // ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
@@ -44,16 +44,11 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-
-    // Remove trailing slash for comparison
     const cleanOrigin = origin.replace(/\/$/, "");
-
     if (allowedOrigins.includes(cleanOrigin)) {
       callback(null, true);
     } else {
-      console.log("Blocked Origin Attempted:", origin);
       callback(new Error("❌ Not allowed by CORS"));
     }
   },
@@ -66,13 +61,12 @@ const corsOptions = {
 // Apply CORS globally
 app.use(cors(corsOptions));
 
-// 🔥 CRITICAL: Explicitly handle preflight requests for all routes
+// ✅ FIXED: Using '*' is the safest way to handle preflight in Express
 app.options("*", cors(corsOptions));
 
 // ==========================================
 // 3. BODY PARSER
 // ==========================================
-// Increased limits to handle Base64 image strings
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -80,11 +74,12 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // 4. RATE LIMIT
 // ==========================================
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // Increased to 200 for admin panel usage
-  message: "Too many requests from this IP, please try again after 15 minutes",
+  windowMs: 15 * 60 * 1000,
+  max: 500, // Increased limit for admin operations
+  message: "Too many requests, please try again later",
 });
-app.use("/api/", limiter); // Apply only to API routes
+// ✅ Ensure this is a relative path
+app.use("/api", limiter); 
 
 // ==========================================
 // 5. STATIC FILES
@@ -100,7 +95,7 @@ mongoose
   .catch((err) => console.log("❌ Mongo Error:", err));
 
 // ==========================================
-// 7. ROUTES
+// 7. ROUTES (Ensure these use relative paths)
 // ==========================================
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
@@ -112,19 +107,15 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 
 // ==========================================
-// 8. APPLY HPP SAFELY
+// 8. APPLY HPP
 // ==========================================
-app.use(
-  hpp({
-    whitelist: ["sort", "filter"],
-  })
-);
+app.use(hpp({ whitelist: ["sort", "filter"] }));
 
 // ==========================================
 // 9. ROOT
 // ==========================================
 app.get("/", (req, res) => {
-  res.send("🚀 DailyGo API running - CORS Enabled for Admin Panel");
+  res.send("🚀 DailyGo API running");
 });
 
 // ==========================================
@@ -132,17 +123,13 @@ app.get("/", (req, res) => {
 // ==========================================
 app.use((err, req, res, next) => {
   if (err.message === "❌ Not allowed by CORS") {
-    return res.status(403).json({ error: "CORS blocked - check allowedOrigins" });
+    return res.status(403).json({ error: "CORS blocked" });
   }
-
   if (err.type === "entity.too.large") {
     return res.status(413).json({ error: "Payload too large (max 50MB)" });
   }
-
-  console.error("🔥 Global Error:", err.stack);
-  res.status(500).json({
-    error: err.message || "Internal Server Error",
-  });
+  console.error("🔥 Global Error:", err.message);
+  res.status(500).json({ error: "Internal Server Error" });
 });
 
 // ==========================================
