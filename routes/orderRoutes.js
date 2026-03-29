@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const PDFDocument = require('pdfkit'); // 🔥 NEW: Import PDFKit
+const PDFDocument = require('pdfkit'); 
 const Order = require('../models/Order');
 
 const router = express.Router();
@@ -70,7 +70,8 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
     doc.text('Bangalore, Karnataka - 560062');
     doc.text('Phone: 9739777166 | Email: office-info@dailygolive.in');
     
-    doc.fontSize(24).font('Helvetica-Light').text('INVOICE', 400, 50, { align: 'right' });
+    // 🔥 THE FIX: Changed 'Helvetica-Light' to 'Helvetica'
+    doc.fontSize(24).font('Helvetica').text('INVOICE', 400, 50, { align: 'right' });
     doc.fontSize(10).text(`Invoice No: ${invoiceNo}`, 400, 80, { align: 'right' });
     doc.text(`Date: ${new Date().toLocaleDateString('en-IN')}`, 400, 95, { align: 'right' });
 
@@ -185,7 +186,7 @@ router.post('/', upload, async (req, res) => {
       documents: {
         shopImage: shopImagePath,
         screenshot: screenshotPath,
-        invoicePdf: `uploads/invoices/${pdfFilename}` // 🔥 Store PDF path!
+        invoicePdf: `uploads/invoices/${pdfFilename}` 
       }
     });
 
