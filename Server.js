@@ -24,18 +24,19 @@ const orderRoutes = require("./routes/orderRoutes");
 // ==========================================
 app.use(
   helmet({
-    crossOriginResourcePolicy: false,
+    crossOriginResourcePolicy: false, // Required to serve images
+    crossOriginOpenerPolicy: false,   // Prevents issues with Firebase/Popups
   })
 );
 
 // ==========================================
-// 2. CORS
+// 2. CORS CONFIGURATION (FIXED)
 // ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
   "https://dailygolive.in",
-  "https://www.dailygolive.in", // 🔥 IMPORTANT
+  "https://www.dailygolive.in",
   "https://dailygo-userside-app.firebaseapp.com",
   "https://dgl-core-9x7.dailygolive.in",
   "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com",
@@ -43,24 +44,35 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    // Remove trailing slash for comparison
+    const cleanOrigin = origin.replace(/\/$/, "");
+
+    if (allowedOrigins.includes(cleanOrigin)) {
       callback(null, true);
     } else {
-      console.log("Blocked Origin:", origin);
+      console.log("Blocked Origin Attempted:", origin);
       callback(new Error("❌ Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   credentials: true,
+  optionsSuccessStatus: 200,
 };
 
+// Apply CORS globally
 app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+
+// 🔥 CRITICAL: Explicitly handle preflight requests for all routes
+app.options("*", cors(corsOptions));
 
 // ==========================================
 // 3. BODY PARSER
 // ==========================================
+// Increased limits to handle Base64 image strings
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -68,10 +80,11 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 // 4. RATE LIMIT
 // ==========================================
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200, // Increased to 200 for admin panel usage
+  message: "Too many requests from this IP, please try again after 15 minutes",
 });
-app.use(limiter);
+app.use("/api/", limiter); // Apply only to API routes
 
 // ==========================================
 // 5. STATIC FILES
@@ -99,11 +112,11 @@ app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 
 // ==========================================
-// 8. 🔥 APPLY HPP SAFELY (AFTER ROUTES)
+// 8. APPLY HPP SAFELY
 // ==========================================
 app.use(
   hpp({
-    whitelist: ["sort", "filter"], // allow query params if needed
+    whitelist: ["sort", "filter"],
   })
 );
 
@@ -111,27 +124,24 @@ app.use(
 // 9. ROOT
 // ==========================================
 app.get("/", (req, res) => {
-  res.send("🚀 DailyGo API running");
+  res.send("🚀 DailyGo API running - CORS Enabled for Admin Panel");
 });
 
 // ==========================================
 // 10. ERROR HANDLER
 // ==========================================
 app.use((err, req, res, next) => {
-  console.error("🔥 Global Error:", err.message);
-
   if (err.message === "❌ Not allowed by CORS") {
-    return res.status(403).json({ error: "CORS blocked" });
+    return res.status(403).json({ error: "CORS blocked - check allowedOrigins" });
   }
 
   if (err.type === "entity.too.large") {
-    return res.status(413).json({
-      error: "File too large (max 50MB)",
-    });
+    return res.status(413).json({ error: "Payload too large (max 50MB)" });
   }
 
+  console.error("🔥 Global Error:", err.stack);
   res.status(500).json({
-    error: err.message || "Server Error",
+    error: err.message || "Internal Server Error",
   });
 });
 
