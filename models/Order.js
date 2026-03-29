@@ -25,11 +25,16 @@ const orderSchema = new mongoose.Schema(
 
     payment: {
       method: String,
-      // ✅ FIX: This tells Mongoose you literally have a field named "type"
       type: { type: String }, 
       amountPaid: Number,
       transactionId: String,
-      balance: Number
+      balance: Number,
+      // 🔥 NEW: Added status field with a default value
+      status: { 
+        type: String, 
+        enum: ['due', 'partially_paid', 'completed', 'overdue'],
+        default: 'due' 
+      }
     },
 
     totals: {

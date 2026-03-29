@@ -136,4 +136,33 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ==========================================
+// 🔥 UPDATE ORDER STATUS (NEW)
+// ==========================================
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Update the payment.status string in MongoDB
+    const updatedOrder = await Order.findByIdAndUpdate(
+      id, 
+      { 'payment.status': status },
+      { new: true } // Returns the newly updated document
+    );
+
+    if (!updatedOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.status(200).json({ 
+      message: "Status updated successfully",
+      order: updatedOrder
+    });
+  } catch (error) {
+    console.error("🔥 STATUS UPDATE ERROR:", error);
+    res.status(500).json({ error: "Failed to update status" });
+  }
+});
+
 module.exports = router;
