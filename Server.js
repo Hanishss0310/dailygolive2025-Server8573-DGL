@@ -30,7 +30,7 @@ app.use(
 );
 
 // ==========================================
-// 2. CORS (SIMPLIFIED + STABLE)
+// 2. CORS (ROBUST VERSION)
 // ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
@@ -42,25 +42,30 @@ const allowedOrigins = [
   "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com",
 ];
 
-app.use(
-  cors({
-    origin: allowedOrigins,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  })
-);
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps, postman, or curl)
+    if (!origin) return callback(null, true);
+    
+    // Clean trailing slash
+    const cleanOrigin = origin.replace(/\/$/, "");
+    
+    if (allowedOrigins.includes(cleanOrigin)) {
+      callback(null, true);
+    } else {
+      console.error(`CORS Blocked for: ${origin}`);
+      callback(new Error("❌ Not allowed by CORS"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+  credentials: true,
+  optionsSuccessStatus: 200
+};
 
-// ✅ FORCE HANDLE PREFLIGHT (CRITICAL FIX)
-app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,DELETE,PATCH,OPTIONS"
-  );
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.sendStatus(200);
-});
+app.use(cors(corsOptions));
+// Handle Preflight globally for all routes
+app.options("*", cors(corsOptions));
 
 // ==========================================
 // 3. BODY PARSER
@@ -69,36 +74,39 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // ==========================================
-// 4. HPP (MOVE BEFORE ROUTES)
+// 4. HPP & RATE LIMIT
 // ==========================================
 app.use(hpp({ whitelist: ["sort", "filter"] }));
 
-// ==========================================
-// 5. RATE LIMIT
-// ==========================================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 1000, // High limit for Admin panel
   message: "Too many requests, please try again later",
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-
 app.use("/api", limiter);
 
 // ==========================================
-// 6. STATIC FILES
+// 5. STATIC FILES
 // ==========================================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================
-// 7. DATABASE
+// 6. DATABASE (With Timeout check)
 // ==========================================
 mongoose
-  .connect("mongodb://127.0.0.1:27017/dailygoDB")
+  .connect("mongodb://127.0.0.1:27017/dailygoDB", {
+    serverSelectionTimeoutMS: 5000 
+  })
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.log("❌ Mongo Error:", err));
+  .catch((err) => {
+    console.error("❌ Mongo Error:", err.message);
+    // Process continues so Nginx doesn't 502, but logs will show the issue
+  });
 
 // ==========================================
-// 8. ROUTES
+// 7. ROUTES
 // ==========================================
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
@@ -109,26 +117,19 @@ app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
 
-// ==========================================
-// 9. ROOT
-// ==========================================
 app.get("/", (req, res) => {
-  res.send("🚀 DailyGo API running");
+  res.status(200).send("🚀 DailyGo API running stable");
 });
 
 // ==========================================
-// 10. GLOBAL ERROR HANDLER (FIXED)
+// 8. GLOBAL ERROR HANDLER
 // ==========================================
 app.use((err, req, res, next) => {
-  console.error("🔥 Global Error:", err.message);
+  console.error("🔥 Global Error Handler:", err.message);
 
-  // ✅ ALWAYS send CORS headers even on error
-  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,DELETE,PATCH,OPTIONS"
-  );
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (err.message === "❌ Not allowed by CORS") {
+    return res.status(403).json({ error: "Access denied by CORS" });
+  }
 
   if (err.type === "entity.too.large") {
     return res.status(413).json({ error: "Payload too large (max 50MB)" });
@@ -138,8 +139,8 @@ app.use((err, req, res, next) => {
 });
 
 // ==========================================
-// 11. START SERVER
+// 9. START SERVER
 // ==========================================
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
 });
