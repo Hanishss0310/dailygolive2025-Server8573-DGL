@@ -38,6 +38,7 @@ const allowedOrigins = [
   "https://www.dailygolive.in", // 🔥 IMPORTANT
   "https://dailygo-userside-app.firebaseapp.com",
   "https://dgl-core-9x7.dailygolive.in",
+  "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com",
 ];
 
 const corsOptions = {
