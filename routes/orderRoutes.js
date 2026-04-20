@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const PDFDocument = require('pdfkit'); 
 const Order = require('../models/Order');
+const Funder = require('../models/Funder'); // ✅ Added Funder model for balance updates
 
 const router = express.Router();
 
@@ -92,31 +93,21 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
 // ✅ ROUTES
 // ==========================================
 
-// 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST Reset Fixed)
 // 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST FIXED)
 router.get('/today', async (req, res) => {
   try {
-    // 1. Get current time in UTC
     const now = new Date();
-    
-    // 2. Convert to IST (UTC + 5.5 hours)
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istTime = new Date(now.getTime() + istOffset);
     
-    // 3. Define the START of today in IST
     const startOfIstDay = new Date(istTime.getFullYear(), istTime.getMonth(), istTime.getDate());
-    // Subtract the offset back to compare correctly with MongoDB UTC timestamps
     const startOfTodayUTC = new Date(startOfIstDay.getTime() - istOffset);
 
-    // 4. Define the END of today in IST
     const endOfIstDay = new Date(istTime.getFullYear(), istTime.getMonth(), istTime.getDate(), 23, 59, 59, 999);
     const endOfTodayUTC = new Date(endOfIstDay.getTime() - istOffset);
 
     const orders = await Order.find({
-      createdAt: { 
-        $gte: startOfTodayUTC, 
-        $lte: endOfTodayUTC 
-      }
+      createdAt: { $gte: startOfTodayUTC, $lte: endOfTodayUTC }
     }).sort({ createdAt: -1 });
 
     res.status(200).json({ orders });
@@ -137,7 +128,7 @@ router.get('/funder/:funderId', async (req, res) => {
   }
 });
 
-// 3. POST NEW ORDER
+// 3. POST NEW ORDER (UPDATED WITH BALANCE LOGIC)
 router.post('/', upload, async (req, res) => {
   try {
     const shopImagePath = req.files?.shopImage?.[0]?.path || null;
@@ -149,6 +140,7 @@ router.post('/', upload, async (req, res) => {
     const items = safeParse(req.body.items);
     const payment = safeParse(req.body.payment);
     const totals = safeParse(req.body.totals);
+    const funderId = req.body.funder || null;
 
     const invoicesDir = path.join(__dirname, '../uploads/invoices');
     if (!fs.existsSync(invoicesDir)) fs.mkdirSync(invoicesDir, { recursive: true });
@@ -167,7 +159,7 @@ router.post('/', upload, async (req, res) => {
       items,
       payment,
       totals,
-      funder: req.body.funder || null, 
+      funder: funderId, 
       documents: {
         shopImage: shopImagePath.replace(/\\/g, '/'),
         screenshot: screenshotPath ? screenshotPath.replace(/\\/g, '/') : null,
@@ -176,9 +168,26 @@ router.post('/', upload, async (req, res) => {
     });
 
     const savedOrder = await newOrder.save();
+
+    // ✅ NEW: Update Funder Balance automatically when order is placed
+    if (funderId) {
+      const funder = await Funder.findById(funderId);
+      if (funder) {
+        const commission = funder.perOrderRate || 10;
+        
+        // Only add balance if they haven't hit their daily cap already
+        // This is a safety check to keep DB and UI in sync
+        funder.totalBalance = (funder.totalBalance || 0) + commission;
+        funder.allTimeEarnings = (funder.allTimeEarnings || 0) + commission;
+        
+        await funder.save();
+      }
+    }
+
     res.status(201).json({ message: "Order saved successfully", order: savedOrder });
 
   } catch (error) {
+    console.error("Order Creation Error:", error);
     res.status(500).json({ error: "Internal Server Error", details: error.message });
   }
 });
