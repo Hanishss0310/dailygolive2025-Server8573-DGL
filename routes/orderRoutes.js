@@ -93,27 +93,35 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
 // ==========================================
 
 // 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST Reset Fixed)
+// 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST FIXED)
 router.get('/today', async (req, res) => {
   try {
+    // 1. Get current time in UTC
     const now = new Date();
     
-    // ✅ This forces the start of the day to 00:00:00 of April 21 (or current date)
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // 2. Convert to IST (UTC + 5.5 hours)
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istTime = new Date(now.getTime() + istOffset);
     
-    // ✅ This forces the end of the day to 23:59:59
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // 3. Define the START of today in IST
+    const startOfIstDay = new Date(istTime.getFullYear(), istTime.getMonth(), istTime.getDate());
+    // Subtract the offset back to compare correctly with MongoDB UTC timestamps
+    const startOfTodayUTC = new Date(startOfIstDay.getTime() - istOffset);
+
+    // 4. Define the END of today in IST
+    const endOfIstDay = new Date(istTime.getFullYear(), istTime.getMonth(), istTime.getDate(), 23, 59, 59, 999);
+    const endOfTodayUTC = new Date(endOfIstDay.getTime() - istOffset);
 
     const orders = await Order.find({
       createdAt: { 
-        $gte: startOfDay, 
-        $lte: endOfDay 
+        $gte: startOfTodayUTC, 
+        $lte: endOfTodayUTC 
       }
     }).sort({ createdAt: -1 });
 
-    // If it's early in the morning and only 2 orders exist, 
-    // this will now return ONLY those 2 orders.
     res.status(200).json({ orders });
   } catch (error) {
+    console.error("Error fetching IST today orders:", error);
     res.status(500).json({ error: "Failed to fetch today's orders" });
   }
 });
