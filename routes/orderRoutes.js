@@ -95,19 +95,23 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
 // 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST Reset Fixed)
 router.get('/today', async (req, res) => {
   try {
-    // Force "Today" to be based on the server's current date 
     const now = new Date();
     
-    // Create start of day in the current timezone
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    // ✅ This forces the start of the day to 00:00:00 of April 21 (or current date)
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    // Create end of day in the current timezone
+    // ✅ This forces the end of the day to 23:59:59
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     const orders = await Order.find({
-      createdAt: { $gte: startOfDay, $lt: endOfDay }
+      createdAt: { 
+        $gte: startOfDay, 
+        $lte: endOfDay 
+      }
     }).sort({ createdAt: -1 });
 
+    // If it's early in the morning and only 2 orders exist, 
+    // this will now return ONLY those 2 orders.
     res.status(200).json({ orders });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch today's orders" });
