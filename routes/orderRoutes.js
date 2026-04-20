@@ -159,6 +159,18 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
 // ROUTES
 // ==========================================
 
+// ✅ NEW ROUTE: Fetch orders for a specific funder
+router.get('/funder/:funderId', async (req, res) => {
+  try {
+    const { funderId } = req.params;
+    // Assuming 'funder' is the field name in your Order model
+    const orders = await Order.find({ funder: funderId }).sort({ createdAt: -1 });
+    res.status(200).json({ orders });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch funder orders" });
+  }
+});
+
 router.post('/', upload, async (req, res) => {
   try {
     const shopImagePath = req.files?.shopImage?.[0]?.path || null;
@@ -194,6 +206,8 @@ router.post('/', upload, async (req, res) => {
       items,
       payment,
       totals,
+      // Pass the funder ID if sent in the request body
+      funder: req.body.funder || null, 
       documents: {
         shopImage: shopImagePath.replace(/\\/g, '/'),
         screenshot: screenshotPath ? screenshotPath.replace(/\\/g, '/') : null,
