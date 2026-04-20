@@ -92,23 +92,25 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
 // ✅ ROUTES
 // ==========================================
 
-// 1. GET ALL SYSTEM ORDERS PLACED TODAY (Global Fetch)
+// 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST Reset Fixed)
 router.get('/today', async (req, res) => {
   try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    // Force "Today" to be based on the server's current date 
+    const now = new Date();
+    
+    // Create start of day in the current timezone
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    
+    // Create end of day in the current timezone
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
-
-    // Fetches every order placed today across all FOS
     const orders = await Order.find({
       createdAt: { $gte: startOfDay, $lt: endOfDay }
     }).sort({ createdAt: -1 });
 
     res.status(200).json({ orders });
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch today's global orders" });
+    res.status(500).json({ error: "Failed to fetch today's orders" });
   }
 });
 
