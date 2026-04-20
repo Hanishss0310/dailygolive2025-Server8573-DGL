@@ -9,7 +9,7 @@ const hpp = require("hpp");
 const app = express();
 const PORT = 4000;
 
-// ✅ FIX: Trust Nginx proxy (fixes rate-limit X-Forwarded-For error)
+// ✅ Trust Nginx proxy
 app.set("trust proxy", 1);
 
 // ---- ROUTES ----
@@ -21,8 +21,9 @@ const joinusRoutes = require("./routes/joinusRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const productRoutes = require("./routes/productRoutes");
 const orderRoutes = require("./routes/orderRoutes");
-// ✅ ADDED: Funder Routes
 const funderRoutes = require("./routes/funderRoutes"); 
+// ✅ ADDED: Withdrawal Routes
+const withdrawalRoutes = require("./routes/withdrawalRoutes");
 
 // ==========================================
 // 1. SECURITY HEADERS
@@ -72,21 +73,30 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // ==========================================
-// 4. RATE LIMIT
+// 4. PARAMETER POLLUTION PROTECTION
+// ==========================================
+app.use(
+  hpp({
+    whitelist: ["sort", "filter"],
+  })
+);
+
+// ==========================================
+// 5. RATE LIMIT
 // ==========================================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 200, // Slightly increased to avoid blocking legitimate high-activity funder sessions
 });
 app.use(limiter);
 
 // ==========================================
-// 5. STATIC FILES
+// 6. STATIC FILES
 // ==========================================
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================
-// 6. DATABASE
+// 7. DATABASE
 // ==========================================
 mongoose
   .connect("mongodb://127.0.0.1:27017/dailygoDB")
@@ -94,7 +104,7 @@ mongoose
   .catch((err) => console.log("❌ Mongo Error:", err));
 
 // ==========================================
-// 7. ROUTES
+// 8. ROUTES
 // ==========================================
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
@@ -104,17 +114,9 @@ app.use("/api/joinus", joinusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
-// ✅ ADDED: Funder Admin API Endpoint
 app.use("/api/admin/funders", funderRoutes);
-
-// ==========================================
-// 8. HPP (AFTER ROUTES)
-// ==========================================
-app.use(
-  hpp({
-    whitelist: ["sort", "filter"],
-  })
-);
+// ✅ ADDED: Withdrawal Request Endpoint
+app.use("/api/withdrawals", withdrawalRoutes);
 
 // ==========================================
 // 9. ROOT
