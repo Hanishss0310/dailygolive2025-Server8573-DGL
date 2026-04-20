@@ -21,6 +21,8 @@ const joinusRoutes = require("./routes/joinusRoutes");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const productRoutes = require("./routes/productRoutes");
 const orderRoutes = require("./routes/orderRoutes");
+// ✅ ADDED: Funder Routes
+const funderRoutes = require("./routes/funderRoutes"); 
 
 // ==========================================
 // 1. SECURITY HEADERS
@@ -41,8 +43,8 @@ const allowedOrigins = [
   "https://www.dailygolive.in",
   "https://dailygo-userside-app.firebaseapp.com",
   "https://dgl-core-9x7.dailygolive.in",
-  "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com", // ✅ ADDED
-  "https://daily-fo26lbgolive-8-admin56-g.web.app",         // ✅ ADDED
+  "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com", 
+  "https://daily-fo26lbgolive-8-admin56-g.web.app",         
 ];
 
 const corsOptions = {
@@ -101,6 +103,8 @@ app.use("/api/joinus", joinusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
+// ✅ ADDED: Funder Admin API Endpoint
+app.use("/api/admin/funders", funderRoutes);
 
 // ==========================================
 // 8. HPP (AFTER ROUTES)
