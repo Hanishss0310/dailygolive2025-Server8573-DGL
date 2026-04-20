@@ -19,7 +19,7 @@ const funderSchema = new mongoose.Schema({
   planType: { type: String, enum: ['10k', '25k'], required: true },
   validUntil: { type: Date, required: true },
   
-  // --- Financial Logic (Auto-calculated based on plan) ---
+  // --- Financial Logic ---
   perOrderRate: { type: Number, required: true },
   dailyLimit: { type: Number, required: true },
   minimumWithdrawal: { type: Number, required: true },
@@ -34,23 +34,7 @@ const funderSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-// ==========================================
-// Middleware: Auto-assign limits before saving
-// ==========================================
-funderSchema.pre('save', function(next) {
-  // Only recalculate if it's a brand new user OR if the admin changes their plan later
-  if (this.isNew || this.isModified('planType')) {
-    if (this.planType === '10k') {
-      this.perOrderRate = 10;
-      this.dailyLimit = 200;
-      this.minimumWithdrawal = 1000;
-    } else if (this.planType === '25k') {
-      this.perOrderRate = 20;
-      this.dailyLimit = 400;
-      this.minimumWithdrawal = 2000;
-    }
-  }
-  next();
-});
+// Note: The pre('save') hook was removed. 
+// Limits are now calculated directly in the funderRoutes.js before saving to prevent validation errors.
 
 module.exports = mongoose.model('Funder', funderSchema);

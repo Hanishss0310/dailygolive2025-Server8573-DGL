@@ -18,15 +18,32 @@ router.post('/add', async (req, res) => {
       return res.status(400).json({ message: 'A funder with this email already exists.' });
     }
 
+    // ✅ THE FIX: Manually calculate the limits based on the plan before saving
+    let perOrderRate = 10;
+    let dailyLimit = 200;
+    let minimumWithdrawal = 1000;
+
+    if (planType === '25k') {
+      perOrderRate = 20;
+      dailyLimit = 400;
+      minimumWithdrawal = 2000;
+    }
+
+    // Create the funder and pass in the newly calculated limits
     const newFunder = new Funder({
       name, email, phoneNumber, storeName, panNumber, 
-      adhar, upiId, gpayNumber, planType, validUntil, password
+      adhar, upiId, gpayNumber, planType, validUntil, password,
+      perOrderRate, dailyLimit, minimumWithdrawal // 👈 This prevents the 500 Validator Error
     });
 
     await newFunder.save();
 
     res.status(201).json({ message: 'Funder activated successfully!', funder: newFunder });
   } catch (error) {
+    console.error("Add Funder Error:", error);
+    if (error.name === 'ValidationError') {
+       return res.status(400).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Server Error' });
   }
 });
@@ -43,7 +60,6 @@ router.post('/login', async (req, res) => {
     if (!funder) return res.status(400).json({ message: 'Funder not found.' });
 
     // 🔒 INSTANT LOCKOUT: If today is past their validUntil date, block login.
-    // Their data stays in the DB for 10 days, but they cannot access the dashboard.
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Reset to midnight for accurate date comparison
     const expireDate = new Date(funder.validUntil);
@@ -60,6 +76,7 @@ router.post('/login', async (req, res) => {
 
     res.status(200).json({ message: 'Login successful', funder: funderProfile });
   } catch (error) {
+    console.error("Login Error:", error);
     res.status(500).json({ message: 'Server error during login.' });
   }
 });
@@ -82,6 +99,7 @@ router.get('/', async (req, res) => {
 
     res.status(200).json({ funders });
   } catch (error) {
+    console.error("Get All Funders Error:", error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
@@ -114,6 +132,7 @@ router.put('/:id', async (req, res) => {
 
     res.status(200).json({ message: 'Funder updated', funder });
   } catch (error) {
+    console.error("Update Funder Error:", error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
@@ -128,6 +147,7 @@ router.get('/me/:id', async (req, res) => {
     if (!funder) return res.status(404).json({ message: 'Funder not found' });
     res.status(200).json({ funder });
   } catch (error) {
+    console.error("Get Funder Profile Error:", error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
