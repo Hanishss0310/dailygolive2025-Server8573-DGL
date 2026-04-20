@@ -5,6 +5,8 @@ const funderSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   phoneNumber: { type: String, required: true },
+  
+  // Optional Details
   storeName: { type: String, default: '' },
   panNumber: { type: String, default: '' },
   adhar: { type: String, default: '' },
@@ -22,18 +24,21 @@ const funderSchema = new mongoose.Schema({
   dailyLimit: { type: Number, required: true },
   minimumWithdrawal: { type: Number, required: true },
   
-  // --- Dynamic Tracking ---
+  // --- Dynamic Tracking (Changes daily/per order) ---
   currentBalance: { type: Number, default: 0 },
   todayEarnings: { type: Number, default: 0 },
   
   // --- Authentication ---
-  password: { type: String, required: true }, // Store hashed!
+  password: { type: String, required: true }, 
   isActive: { type: Boolean, default: true }
 
 }, { timestamps: true });
 
-// Pre-save middleware to auto-assign financial rules when creating a new funder
+// ==========================================
+// Middleware: Auto-assign limits before saving
+// ==========================================
 funderSchema.pre('save', function(next) {
+  // Only recalculate if it's a brand new user OR if the admin changes their plan later
   if (this.isNew || this.isModified('planType')) {
     if (this.planType === '10k') {
       this.perOrderRate = 10;
