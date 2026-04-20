@@ -46,7 +46,8 @@ const allowedOrigins = [
   "https://dgl-core-9x7.dailygolive.in",
   "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com", 
   "https://daily-fo26lbgolive-8-admin56-g.web.app",     
-  "https://dailygo-funders-program.web.app",
+  "https://dailygo-funders-program.web.app", // ✅ ADD THIS LINE
+  "https://dailygo-funders-program.firebaseapp.com"
 ];
 
 const corsOptions = {
