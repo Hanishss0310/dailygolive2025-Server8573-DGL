@@ -61,4 +61,15 @@ router.post('/request', async (req, res) => {
   }
 });
 
+// Add this inside your routes/withdrawalRoutes.js
+router.get('/all', async (req, res) => {
+  try {
+    // Fetches all withdrawals, sorted by newest first
+    const requests = await Withdrawal.find().sort({ createdAt: -1 });
+    res.status(200).json({ requests });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch withdrawals" });
+  }
+});
+
 module.exports = router;
