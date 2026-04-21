@@ -9,33 +9,19 @@ const hpp = require("hpp");
 const app = express();
 const PORT = 4000;
 
-// ✅ Trust Nginx proxy
+// ✅ Trust Nginx proxy (Critical for rate-limiting and CORS on production)
 app.set("trust proxy", 1);
 
-// ---- ROUTES ----
-const newsletterRoutes = require("./routes/newsletterRoutes");
-const contactRoutes = require("./routes/contactRoutes");
-const galleryRoutes = require("./routes/galleryRoutes");
-const blogRoutes = require("./routes/blogRoutes");
-const joinusRoutes = require("./routes/joinusRoutes");
-const analyticsRoutes = require("./routes/analyticsRoutes");
-const productRoutes = require("./routes/productRoutes");
-const orderRoutes = require("./routes/orderRoutes");
-const funderRoutes = require("./routes/funderRoutes"); 
-// ✅ ADDED: Withdrawal Routes
-const withdrawalRoutes = require("./routes/withdrawalRoutes");
+// ==========================================
+// 1. SECURITY & BODY PARSING (Must come first)
+// ==========================================
+app.use(helmet({ crossOriginResourcePolicy: false }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
+app.use(hpp({ whitelist: ["sort", "filter"] }));
 
 // ==========================================
-// 1. SECURITY HEADERS
-// ==========================================
-app.use(
-  helmet({
-    crossOriginResourcePolicy: false,
-  })
-);
-
-// ==========================================
-// 2. CORS
+// 2. CORS CONFIGURATION
 // ==========================================
 const allowedOrigins = [
   "http://localhost:3000",
@@ -46,67 +32,49 @@ const allowedOrigins = [
   "https://dgl-core-9x7.dailygolive.in",
   "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com", 
   "https://daily-fo26lbgolive-8-admin56-g.web.app",     
-  "https://dailygo-funders-program.web.app", // ✅ ADD THIS LINE
+  "https://dailygo-funders-program.web.app", 
   "https://dailygo-funders-program.firebaseapp.com"
 ];
 
-const corsOptions = {
+app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log("Blocked Origin:", origin);
+      console.log("❌ Blocked Origin:", origin);
       callback(new Error("❌ Not allowed by CORS"));
     }
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
-};
-
-app.use(cors(corsOptions));
-app.options(/.*/, cors(corsOptions));
+}));
 
 // ==========================================
-// 3. BODY PARSER
-// ==========================================
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ limit: "50mb", extended: true }));
-
-// ==========================================
-// 4. PARAMETER POLLUTION PROTECTION
-// ==========================================
-app.use(
-  hpp({
-    whitelist: ["sort", "filter"],
-  })
-);
-
-// ==========================================
-// 5. RATE LIMIT
+// 3. RATE LIMITING
 // ==========================================
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200, // Slightly increased to avoid blocking legitimate high-activity funder sessions
+  max: 1000, // Increased so you don't block yourself while debugging
+  message: { error: "Too many requests, please try again later." }
 });
-app.use(limiter);
+app.use("/api/", limiter); // Only limit API calls
 
 // ==========================================
-// 6. STATIC FILES
+// 4. ROUTE DEFINITIONS
 // ==========================================
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+const newsletterRoutes = require("./routes/newsletterRoutes");
+const contactRoutes = require("./routes/contactRoutes");
+const galleryRoutes = require("./routes/galleryRoutes");
+const blogRoutes = require("./routes/blogRoutes");
+const joinusRoutes = require("./routes/joinusRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
+const productRoutes = require("./routes/productRoutes");
+const orderRoutes = require("./routes/orderRoutes");
+const funderRoutes = require("./routes/funderRoutes"); 
+const withdrawalRoutes = require("./routes/withdrawalRoutes");
 
-// ==========================================
-// 7. DATABASE
-// ==========================================
-mongoose
-  .connect("mongodb://127.0.0.1:27017/dailygoDB")
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.log("❌ Mongo Error:", err));
-
-// ==========================================
-// 8. ROUTES
-// ==========================================
+// Mounting Routes
 app.use("/api/newsletter", newsletterRoutes);
 app.use("/api/contact", contactRoutes);
 app.use("/api/gallery", galleryRoutes);
@@ -115,41 +83,58 @@ app.use("/api/joinus", joinusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);
-app.use("/api/admin/funders", funderRoutes);
-// ✅ ADDED: Withdrawal Request Endpoint
 app.use("/api/withdrawals", withdrawalRoutes);
 
+// ✅ THE CRITICAL LOGIN ROUTE
+// Ensure this matches: https://.../api/admin/funders/login
+app.use("/api/admin/funders", funderRoutes);
+
+// Static files
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
 // ==========================================
-// 9. ROOT
+// 5. DATABASE CONNECTION
 // ==========================================
+mongoose
+  .connect("mongodb://127.0.0.1:27017/dailygoDB")
+  .then(() => console.log("✅ MongoDB Connected: dailygoDB"))
+  .catch((err) => console.log("❌ Mongo Error:", err));
+
+// ==========================================
+// 6. DEBUGGING & ERROR HANDLING
+// ==========================================
+
+// Root Route
 app.get("/", (req, res) => {
-  res.send("🚀 DailyGo API running");
+  res.send("🚀 DailyGo API is Active");
 });
 
-// ==========================================
-// 10. ERROR HANDLER
-// ==========================================
+// ✅ 404 CATCH-ALL (This prevents the HTML response!)
+// If a route isn't found, we send JSON instead of a 404 HTML page.
+app.use((req, res, next) => {
+  console.log(`404 attempted on: ${req.method} ${req.url}`);
+  res.status(404).json({ 
+    error: "Route not found", 
+    attemptedUrl: req.url,
+    method: req.method 
+  });
+});
+
+// Global Error Handler
 app.use((err, req, res, next) => {
-  console.error("🔥 Global Error:", err.message);
-
-  if (err.message === "❌ Not allowed by CORS") {
-    return res.status(403).json({ error: "CORS blocked" });
-  }
-
-  if (err.type === "entity.too.large") {
-    return res.status(413).json({
-      error: "File too large (max 50MB)",
-    });
-  }
-
-  res.status(500).json({
-    error: err.message || "Server Error",
+  console.error("🔥 Server Error:", err.message);
+  res.status(err.status || 500).json({
+    error: err.message || "Internal Server Error",
   });
 });
 
 // ==========================================
-// 11. START SERVER
+// 7. START
 // ==========================================
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`
+  🚀 Server Running!
+  🏠 Local: http://localhost:${PORT}
+  🔗 API: http://localhost:${PORT}/api/admin/funders/login
+  `);
 });
