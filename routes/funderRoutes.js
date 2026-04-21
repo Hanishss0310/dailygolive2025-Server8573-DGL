@@ -18,7 +18,7 @@ router.post('/add', async (req, res) => {
       return res.status(400).json({ message: 'A funder with this email already exists.' });
     }
 
-    // ✅ THE FIX: Manually calculate the limits based on the plan before saving
+    // Manually calculate the limits based on the plan before saving
     let perOrderRate = 10;
     let dailyLimit = 200;
     let minimumWithdrawal = 1000;
@@ -29,11 +29,10 @@ router.post('/add', async (req, res) => {
       minimumWithdrawal = 2000;
     }
 
-    // Create the funder and pass in the newly calculated limits
     const newFunder = new Funder({
       name, email, phoneNumber, storeName, panNumber, 
       adhar, upiId, gpayNumber, planType, validUntil, password,
-      perOrderRate, dailyLimit, minimumWithdrawal // 👈 This prevents the 500 Validator Error
+      perOrderRate, dailyLimit, minimumWithdrawal
     });
 
     await newFunder.save();
@@ -55,13 +54,13 @@ router.post('/add', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const funder = await Funder.findOne({ email });
+    let funder = await Funder.findOne({ email });
     
     if (!funder) return res.status(400).json({ message: 'Funder not found.' });
 
     // 🔒 INSTANT LOCKOUT: If today is past their validUntil date, block login.
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Reset to midnight for accurate date comparison
+    today.setHours(0, 0, 0, 0); 
     const expireDate = new Date(funder.validUntil);
     
     if (expireDate < today) {
@@ -70,6 +69,18 @@ router.post('/login', async (req, res) => {
 
     if (!funder.isActive) return res.status(403).json({ message: 'Account deactivated.' });
     if (password !== funder.password) return res.status(400).json({ message: 'Incorrect password.' });
+
+    // 🔄 DAILY ROLL-OVER LOGIC (Lazy Check)
+    const lastUpdate = new Date(funder.updatedAt).toDateString();
+    const currentDate = new Date().toDateString();
+
+    if (lastUpdate !== currentDate) {
+      // It's a new day! Shift the balances forward.
+      funder.totalBalance += funder.yesterdayEarnings || 0; // Yesterday goes to Total
+      funder.yesterdayEarnings = funder.todayEarnings || 0; // Today goes to Yesterday
+      funder.todayEarnings = 0; // Reset Today
+      await funder.save(); // This updates 'updatedAt' automatically!
+    }
 
     // Remove password from the response data for security
     const { password: _, ...funderProfile } = funder.toObject();
@@ -87,7 +98,6 @@ router.post('/login', async (req, res) => {
 // ==========================================
 router.get('/', async (req, res) => {
   try {
-    // 🧹 LAZY CLEANUP: Calculate the date 10 days ago
     const tenDaysAgo = new Date();
     tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
 
@@ -125,8 +135,11 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    delete updateData.currentBalance; 
+    // Prevent admin from accidentally overwriting financial tracking fields
+    delete updateData.totalBalance;
     delete updateData.todayEarnings;
+    delete updateData.yesterdayEarnings;
+    delete updateData.allTimeEarnings;
 
     funder = await Funder.findByIdAndUpdate(funderId, { $set: updateData }, { new: true });
 
@@ -143,8 +156,21 @@ router.put('/:id', async (req, res) => {
 // ==========================================
 router.get('/me/:id', async (req, res) => {
   try {
-    const funder = await Funder.findById(req.params.id).select('-password');
+    let funder = await Funder.findById(req.params.id).select('-password');
     if (!funder) return res.status(404).json({ message: 'Funder not found' });
+
+    // 🔄 DAILY ROLL-OVER LOGIC (Lazy Check for Dashboard refresh)
+    const lastUpdate = new Date(funder.updatedAt).toDateString();
+    const currentDate = new Date().toDateString();
+
+    if (lastUpdate !== currentDate) {
+      // It's a new day! Shift the balances forward.
+      funder.totalBalance += funder.yesterdayEarnings || 0;
+      funder.yesterdayEarnings = funder.todayEarnings || 0;
+      funder.todayEarnings = 0;
+      await funder.save(); 
+    }
+
     res.status(200).json({ funder });
   } catch (error) {
     console.error("Get Funder Profile Error:", error);
