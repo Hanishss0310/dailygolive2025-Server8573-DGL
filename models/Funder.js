@@ -15,17 +15,15 @@ const funderSchema = new mongoose.Schema({
   dailyLimit: { type: Number, required: true },
   minimumWithdrawal: { type: Number, required: true },
 
-  // --- Financial Tracking ---
-  // totalBalance = money already earned and ready to withdraw
-  totalBalance: { type: Number, default: 0 }, 
-  // todayEarnings = earnings for CURRENT day (reset at midnight)
-  todayEarnings: { type: Number, default: 0 },
-  // yesterdayEarnings = earnings from previous day (ready for withdrawal)
+  totalBalance:      { type: Number, default: 0 },
+  todayEarnings:     { type: Number, default: 0 },
   yesterdayEarnings: { type: Number, default: 0 },
-  // allTimeEarnings = historical total
-  allTimeEarnings: { type: Number, default: 0 },
+  allTimeEarnings:   { type: Number, default: 0 },
 
-  password: { type: String, required: true }, 
+  // ✅ KEY: tracks rollover separately so updatedAt changes don't break it
+  lastRolloverDate: { type: Date, default: null },
+
+  password: { type: String, required: true },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
 
