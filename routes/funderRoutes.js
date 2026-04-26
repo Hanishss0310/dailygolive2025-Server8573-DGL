@@ -203,4 +203,58 @@ router.post('/withdraw/:id', async (req, res) => {
   }
 });
 
+
+// ==========================================
+// 7. GET /api/admin/funders/active-users
+//    Returns all active funders with full financial details
+// ==========================================
+router.get('/active-users', async (req, res) => {
+  try {
+    const funders = await Funder.find({ isActive: true })
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    const now = new Date();
+
+    const enriched = funders.map(f => {
+      const validUntil   = new Date(f.validUntil);
+      const daysLeft     = Math.ceil((validUntil - now) / (1000 * 60 * 60 * 24));
+      const isExpired    = validUntil < now;
+
+      return {
+        _id:               f._id,
+        name:              f.name,
+        email:             f.email,
+        phoneNumber:       f.phoneNumber,
+        storeName:         f.storeName,
+        upiId:             f.upiId,
+        planType:          f.planType,
+        dailyCredit:       f.dailyCredit,
+        minimumWithdrawal: f.minimumWithdrawal,
+        validUntil:        f.validUntil,
+        daysLeft:          isExpired ? 0 : daysLeft,
+        isExpired,
+        totalBalance:      Number(f.totalBalance      || 0),
+        todayEarnings:     Number(f.todayEarnings     || 0),
+        yesterdayEarnings: Number(f.yesterdayEarnings || 0),
+        allTimeEarnings:   Number(f.allTimeEarnings   || 0),
+        creditDays:        Number(f.creditDays        || 0),
+        lastCreditDate:    f.lastCreditDate,
+        creditedToday:     f.lastCreditDate
+          ? new Date(f.lastCreditDate).toDateString() === now.toDateString()
+          : false,
+        createdAt:         f.createdAt,
+      };
+    });
+
+    res.status(200).json({ 
+      total: enriched.length,
+      funders: enriched 
+    });
+  } catch (error) {
+    console.error('Active Users Error:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
 module.exports = router;
