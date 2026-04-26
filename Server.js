@@ -101,24 +101,31 @@ mongoose
     console.log("✅ MongoDB Connected: dailygoDB");
 
     // ==========================================
-    // 6. CRON JOB — Exactly 00:00 IST (midnight)
+    // 6. CRON JOB — Midnight IST every day
     //
-    //    timezone: "Asia/Kolkata" means the schedule
-    //    is interpreted directly in IST — no manual
-    //    UTC offset math needed. Node-cron handles
-    //    the conversion internally.
+    //  Server is UTC. IST = UTC + 5:30
+    //  Midnight IST (00:00) = 18:30 UTC
     //
-    //    '0 0 * * *' = 00:00 in Asia/Kolkata = midnight IST
+    //  node-cron v4: pass scheduledTimeZone in options object
+    //  '30 18 * * *' UTC = exactly 00:00 IST
     // ==========================================
-    cron.schedule("0 0 * * *", async () => {
-      const now = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-      console.log(`🕛 Midnight IST struck (${now}) — crediting funders...`);
+    cron.schedule("30 18 * * *", async () => {
+      const istTime = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+      console.log(`🕛 Midnight IST! Server UTC: ${new Date().toISOString()} | IST: ${istTime}`);
+      console.log("💰 Running daily funder credit...");
       await creditAllFunders();
-    }, {
-      timezone: "Asia/Kolkata"  // ✅ schedule runs in IST directly — no UTC guesswork
     });
+    // No timezone option — schedule written directly in UTC so no conversion needed.
+    // Server is UTC → '30 18 * * *' fires at 18:30 UTC = 00:00 IST. Simple and reliable.
 
-    console.log("✅ Cron scheduled: funders credited every day at 00:00 IST (Asia/Kolkata)");
+    console.log("✅ Cron scheduled: funders credited at 18:30 UTC = 00:00 IST midnight every day");
+
+    // ── Log time info on startup so you can verify ──
+    const nowUTC = new Date();
+    const nowIST = nowUTC.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    console.log(`🕐 Server UTC now : ${nowUTC.toISOString()}`);
+    console.log(`🕐 IST now        : ${nowIST}`);
+    console.log(`⏳ Next cron fires: today/tomorrow at 18:30 UTC (00:00 IST)`);
   })
   .catch((err) => console.log("❌ Mongo Error:", err));
 
@@ -170,6 +177,6 @@ app.listen(PORT, () => {
   🚀 Server Running!
   🏠 Local:  http://localhost:${PORT}
   🔗 API:    http://localhost:${PORT}/api/admin/funders/login
-  🕛 Cron:   Funders credited at exactly 00:00 IST (Asia/Kolkata)
+  🕛 Cron:   18:30 UTC daily = 00:00 IST midnight
   `);
 });
