@@ -12,19 +12,49 @@ const funderSchema = new mongoose.Schema({
   planType:     { type: String, enum: ['10k', '25k'], required: true },
   validUntil:   { type: Date, required: true },
 
-  dailyCredit:       { type: Number, required: true }, // 200 or 400
-  minimumWithdrawal: { type: Number, required: true }, // 1000 or 2000
+  // ✅ Safe defaults added — won't fail if somehow undefined
+  dailyCredit:       { type: Number, required: true, default: 200  },
+  minimumWithdrawal: { type: Number, required: true, default: 1000 },
 
   // ── Financial tracking ──────────────────────────────
-  totalBalance:      { type: Number, default: 0 }, // withdrawable pool (grows every 12pm)
-  todayEarnings:     { type: Number, default: 0 }, // what was credited today (0 before 12pm)
-  yesterdayEarnings: { type: Number, default: 0 }, // previous day display
-  allTimeEarnings:   { type: Number, default: 0 }, // lifetime total, never resets
-  creditDays:        { type: Number, default: 0 }, // how many days credited so far
-  lastCreditDate:    { type: Date,   default: null }, // when cron last ran for this funder
+  totalBalance:      { type: Number, default: 0, min: 0 },
+  todayEarnings:     { type: Number, default: 0, min: 0 },
+  yesterdayEarnings: { type: Number, default: 0, min: 0 },
+  allTimeEarnings:   { type: Number, default: 0, min: 0 },
+  creditDays:        { type: Number, default: 0, min: 0 },
+  lastCreditDate:    { type: Date,   default: null },
 
   password: { type: String, required: true },
   isActive: { type: Boolean, default: true }
 }, { timestamps: true });
+
+// ✅ Pre-save guard — runs before EVERY save()
+// Replaces NaN / undefined / null with 0 on all numeric fields
+// This is why the cron was crashing — allTimeEarnings was NaN in DB
+funderSchema.pre('save', function (next) {
+  const numericFields = [
+    'totalBalance',
+    'todayEarnings',
+    'yesterdayEarnings',
+    'allTimeEarnings',
+    'creditDays',
+    'dailyCredit',
+    'minimumWithdrawal'
+  ];
+
+  numericFields.forEach(field => {
+    if (this[field] === undefined || this[field] === null || isNaN(this[field])) {
+      this[field] = 0;
+    }
+  });
+
+  // If dailyCredit is 0 or missing, derive from planType
+  if (!this.dailyCredit) {
+    this.dailyCredit       = this.planType === '25k' ? 400  : 200;
+    this.minimumWithdrawal = this.planType === '25k' ? 2000 : 1000;
+  }
+
+  next();
+});
 
 module.exports = mongoose.model('Funder', funderSchema);
