@@ -3,56 +3,45 @@ const router = express.Router();
 const Funder = require('../models/Funder');
 
 // ==========================================
-// HELPER: Should we roll over today?
-// Uses lastRolloverDate (NOT updatedAt) so the
-// MAGIC SYNC PUT never interferes with this check.
-// Rollover fires once per calendar day after 12:00 PM IST.
+// EXPORTED CRON FUNCTION
+// Called by the 12pm IST cron job in Server.js
+// Credits every active, non-expired funder instantly.
 // ==========================================
-function isRolloverDue(funder) {
-  const now = new Date();
+const creditAllFunders = async () => {
+  try {
+    const now = new Date();
+    const funders = await Funder.find({ isActive: true, validUntil: { $gte: now } });
 
-  // IST = UTC + 5:30
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istNow = new Date(now.getTime() + istOffset);
+    let credited = 0;
+    for (const funder of funders) {
+      // Skip if already credited today (IST)
+      if (funder.lastCreditDate) {
+        const istOffset = 5.5 * 60 * 60 * 1000;
+        const lastIST  = new Date(funder.lastCreditDate.getTime() + istOffset).toDateString();
+        const todayIST = new Date(now.getTime() + istOffset).toDateString();
+        if (lastIST === todayIST) continue;
+      }
 
-  // Gate 1: Must be past 12:00 PM IST
-  const todayNoonIST = new Date(istNow);
-  todayNoonIST.setHours(12, 0, 0, 0);
-  if (istNow < todayNoonIST) return false;
+      const credit = funder.dailyCredit;
 
-  // Gate 2: Never rolled over before
-  if (!funder.lastRolloverDate) return true;
+      funder.yesterdayEarnings = funder.todayEarnings; // shift display
+      funder.todayEarnings     = credit;               // today's credit badge
+      funder.totalBalance      = (funder.totalBalance || 0) + credit; // ✅ immediately withdrawable
+      funder.allTimeEarnings   = (funder.allTimeEarnings || 0) + credit;
+      funder.creditDays        = (funder.creditDays || 0) + 1;
+      funder.lastCreditDate    = now;
 
-  // Gate 3: Last rollover was on a previous IST calendar day
-  const lastRolloverIST = new Date(new Date(funder.lastRolloverDate).getTime() + istOffset);
-  const lastRolloverDay = lastRolloverIST.toDateString();
-  const todayISTDay     = istNow.toDateString();
+      await funder.save();
+      credited++;
+      console.log(`✅ Credited ₹${credit} to ${funder.name} | totalBalance=₹${funder.totalBalance}`);
+    }
+    console.log(`🎯 Cron done: ${credited} funders credited.`);
+  } catch (err) {
+    console.error('❌ Cron credit error:', err);
+  }
+};
 
-  return lastRolloverDay !== todayISTDay;
-}
-
-// ==========================================
-// HELPER: Apply the daily rollover
-// ==========================================
-function applyRollover(funder) {
-  if (!isRolloverDue(funder)) return false;
-
-  // 1. Lock in today's earnings into all-time total
-  funder.allTimeEarnings = (funder.allTimeEarnings || 0) + (funder.todayEarnings || 0);
-
-  // 2. Yesterday's earnings become part of withdrawable total
-  funder.totalBalance = (funder.totalBalance || 0) + (funder.yesterdayEarnings || 0);
-
-  // 3. Shift: today → yesterday, reset today
-  funder.yesterdayEarnings = funder.todayEarnings || 0;
-  funder.todayEarnings = 0;
-
-  // 4. Stamp rollover date so it won't fire again today
-  funder.lastRolloverDate = new Date();
-
-  console.log(`✅ Rollover applied for ${funder.name}: totalBalance=₹${funder.totalBalance}, allTime=₹${funder.allTimeEarnings}`);
-  return true;
-}
+module.exports.creditAllFunders = creditAllFunders;
 
 // ==========================================
 // 1. POST /api/admin/funders/add
@@ -64,26 +53,23 @@ router.post('/add', async (req, res) => {
       adhar, upiId, gpayNumber, planType, validUntil, password
     } = req.body;
 
-    let existingFunder = await Funder.findOne({ email });
-    if (existingFunder) {
+    if (await Funder.findOne({ email })) {
       return res.status(400).json({ message: 'A funder with this email already exists.' });
     }
 
-    let perOrderRate = 10, dailyLimit = 200, minimumWithdrawal = 1000;
-    if (planType === '25k') {
-      perOrderRate = 20; dailyLimit = 400; minimumWithdrawal = 2000;
-    }
+    let dailyCredit = 200, minimumWithdrawal = 1000;
+    if (planType === '25k') { dailyCredit = 400; minimumWithdrawal = 2000; }
 
     const newFunder = new Funder({
       name, email, phoneNumber, storeName, panNumber,
       adhar, upiId, gpayNumber, planType, validUntil, password,
-      perOrderRate, dailyLimit, minimumWithdrawal
+      dailyCredit, minimumWithdrawal
     });
 
     await newFunder.save();
     res.status(201).json({ message: 'Funder activated successfully!', funder: newFunder });
   } catch (error) {
-    console.error("Add Funder Error:", error);
+    console.error('Add Funder Error:', error);
     if (error.name === 'ValidationError') return res.status(400).json({ message: error.message });
     res.status(500).json({ message: 'Server Error' });
   }
@@ -95,33 +81,27 @@ router.post('/add', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    let funder = await Funder.findOne({ email });
+    const funder = await Funder.findOne({ email });
 
     if (!funder) return res.status(400).json({ message: 'Funder not found.' });
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const expireDate = new Date(funder.validUntil);
-    if (expireDate < today) {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (new Date(funder.validUntil) < today) {
       return res.status(403).json({ message: 'Your plan has expired. Please contact admin.' });
     }
-
-    if (!funder.isActive) return res.status(403).json({ message: 'Account deactivated.' });
+    if (!funder.isActive)            return res.status(403).json({ message: 'Account deactivated.' });
     if (password !== funder.password) return res.status(400).json({ message: 'Incorrect password.' });
-
-    const didRollover = applyRollover(funder);
-    if (didRollover) await funder.save();
 
     const { password: _, ...funderProfile } = funder.toObject();
     res.status(200).json({ message: 'Login successful', funder: funderProfile });
   } catch (error) {
-    console.error("Login Error:", error);
+    console.error('Login Error:', error);
     res.status(500).json({ message: 'Server error during login.' });
   }
 });
 
 // ==========================================
-// 3. GET /api/admin/funders  (Admin — all funders)
+// 3. GET /api/admin/funders  (Admin)
 // ==========================================
 router.get('/', async (req, res) => {
   try {
@@ -131,64 +111,94 @@ router.get('/', async (req, res) => {
     const funders = await Funder.find().select('-password');
     res.status(200).json({ funders });
   } catch (error) {
-    console.error("Get All Funders Error:", error);
+    console.error('Get All Funders Error:', error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
 
 // ==========================================
-// 4. PUT /api/admin/funders/:id
-//    Used by: Admin edits + Frontend MAGIC SYNC (todayEarnings)
+// 4. PUT /api/admin/funders/:id  (Admin edit only)
 // ==========================================
 router.put('/:id', async (req, res) => {
   try {
-    const funderId = req.params.id;
     const updateData = { ...req.body };
 
-    let funder = await Funder.findById(funderId);
+    const funder = await Funder.findById(req.params.id);
     if (!funder) return res.status(404).json({ message: 'Funder not found' });
 
-    // Auto-recalculate plan limits if admin changes plan
+    // Recalculate plan values if plan changes
     if (updateData.planType && updateData.planType !== funder.planType) {
       if (updateData.planType === '10k') {
-        updateData.perOrderRate = 10; updateData.dailyLimit = 200; updateData.minimumWithdrawal = 1000;
+        updateData.dailyCredit = 200; updateData.minimumWithdrawal = 1000;
       } else if (updateData.planType === '25k') {
-        updateData.perOrderRate = 20; updateData.dailyLimit = 400; updateData.minimumWithdrawal = 2000;
+        updateData.dailyCredit = 400; updateData.minimumWithdrawal = 2000;
       }
     }
 
-    // ✅ Protect sensitive balance fields from admin accidental overwrite
-    // NOTE: todayEarnings is intentionally NOT deleted — the MAGIC SYNC needs to write it
+    // 🔒 Never let admin accidentally overwrite financial fields
     delete updateData.totalBalance;
+    delete updateData.todayEarnings;
     delete updateData.yesterdayEarnings;
     delete updateData.allTimeEarnings;
-    delete updateData.lastRolloverDate;
+    delete updateData.creditDays;
+    delete updateData.lastCreditDate;
 
-    funder = await Funder.findByIdAndUpdate(funderId, { $set: updateData }, { new: true });
-    res.status(200).json({ message: 'Funder updated', funder });
+    const updated = await Funder.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateData },
+      { new: true }
+    ).select('-password');
+
+    res.status(200).json({ message: 'Funder updated', funder: updated });
   } catch (error) {
-    console.error("Update Funder Error:", error);
+    console.error('Update Funder Error:', error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
 
 // ==========================================
-// 5. GET /api/admin/funders/me/:id
-//    Called every 60s by the dashboard — runs rollover check
+// 5. GET /api/admin/funders/me/:id  (Dashboard poll — every 60s)
 // ==========================================
 router.get('/me/:id', async (req, res) => {
   try {
-    let funder = await Funder.findById(req.params.id);
+    const funder = await Funder.findById(req.params.id).select('-password');
+    if (!funder) return res.status(404).json({ message: 'Funder not found' });
+    res.status(200).json({ funder });
+  } catch (error) {
+    console.error('Get Funder Profile Error:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+// ==========================================
+// 6. POST /api/admin/funders/withdraw/:id
+//    Deducts from totalBalance immediately
+// ==========================================
+router.post('/withdraw/:id', async (req, res) => {
+  try {
+    const { amount } = req.body;
+    const funder = await Funder.findById(req.params.id);
     if (!funder) return res.status(404).json({ message: 'Funder not found' });
 
-    // ✅ Rollover uses lastRolloverDate — MAGIC SYNC PUT can't interfere
-    const didRollover = applyRollover(funder);
-    if (didRollover) await funder.save();
+    const withdrawAmount = parseFloat(amount);
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0)
+      return res.status(400).json({ message: 'Invalid amount.' });
+    if (withdrawAmount < funder.minimumWithdrawal)
+      return res.status(400).json({ message: `Minimum withdrawal is ₹${funder.minimumWithdrawal}.` });
+    if (withdrawAmount > funder.totalBalance)
+      return res.status(400).json({ message: 'Insufficient balance.' });
+
+    // ✅ Deduct immediately from totalBalance
+    funder.totalBalance = funder.totalBalance - withdrawAmount;
+    await funder.save();
 
     const { password: _, ...funderProfile } = funder.toObject();
-    res.status(200).json({ funder: funderProfile });
+    res.status(200).json({
+      message: `₹${withdrawAmount} withdrawal processed.`,
+      funder: funderProfile
+    });
   } catch (error) {
-    console.error("Get Funder Profile Error:", error);
+    console.error('Withdraw Error:', error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
