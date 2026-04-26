@@ -1,15 +1,14 @@
 const express = require('express');
-const router = express.Router();
-const Funder = require('../models/Funder');
+const router  = express.Router();
+const Funder  = require('../models/Funder');
 
 // ==========================================
-// EXPORTED CRON FUNCTION
-// Called by the midnight IST cron job in Server.js
+// CRON FUNCTION — exported for Server.js
 // Credits every active, non-expired funder.
 // ==========================================
 const creditAllFunders = async () => {
   try {
-    const now = new Date();
+    const now     = new Date();
     const funders = await Funder.find({ isActive: true, validUntil: { $gte: now } });
 
     let credited = 0;
@@ -17,8 +16,8 @@ const creditAllFunders = async () => {
       // Skip if already credited today (IST)
       if (funder.lastCreditDate) {
         const istOffset = 5.5 * 60 * 60 * 1000;
-        const lastIST  = new Date(funder.lastCreditDate.getTime() + istOffset).toDateString();
-        const todayIST = new Date(now.getTime() + istOffset).toDateString();
+        const lastIST   = new Date(funder.lastCreditDate.getTime() + istOffset).toDateString();
+        const todayIST  = new Date(now.getTime()              + istOffset).toDateString();
         if (lastIST === todayIST) continue;
       }
 
@@ -26,9 +25,9 @@ const creditAllFunders = async () => {
 
       funder.yesterdayEarnings = funder.todayEarnings;
       funder.todayEarnings     = credit;
-      funder.totalBalance      = (funder.totalBalance  || 0) + credit;
-      funder.allTimeEarnings   = (funder.allTimeEarnings || 0) + credit;
-      funder.creditDays        = (funder.creditDays    || 0) + 1;
+      funder.totalBalance      = (funder.totalBalance      || 0) + credit;
+      funder.allTimeEarnings   = (funder.allTimeEarnings   || 0) + credit;
+      funder.creditDays        = (funder.creditDays        || 0) + 1;
       funder.lastCreditDate    = now;
 
       await funder.save();
@@ -40,8 +39,6 @@ const creditAllFunders = async () => {
     console.error('❌ Cron credit error:', err);
   }
 };
-
-module.exports.creditAllFunders = creditAllFunders;
 
 // ==========================================
 // 1. POST /api/admin/funders/add
@@ -117,8 +114,8 @@ router.get('/', async (req, res) => {
 });
 
 // ==========================================
-// 4. GET /api/admin/funders/active-users  ← MUST BE BEFORE /:id
-// Returns all active funders with full financial details
+// 4. GET /api/admin/funders/active-users
+//    ⚠️  MUST stay above /:id
 // ==========================================
 router.get('/active-users', async (req, res) => {
   try {
@@ -126,15 +123,14 @@ router.get('/active-users', async (req, res) => {
       .select('-password')
       .sort({ createdAt: -1 });
 
-    const now = new Date();
+    const now       = new Date();
+    const istOffset = 5.5 * 60 * 60 * 1000;
 
     const enriched = funders.map(f => {
       const validUntil = new Date(f.validUntil);
       const daysLeft   = Math.ceil((validUntil - now) / (1000 * 60 * 60 * 24));
       const isExpired  = validUntil < now;
 
-      // creditedToday: compare in IST
-      const istOffset  = 5.5 * 60 * 60 * 1000;
       const creditedToday = f.lastCreditDate
         ? new Date(new Date(f.lastCreditDate).getTime() + istOffset).toDateString() ===
           new Date(now.getTime() + istOffset).toDateString()
@@ -164,10 +160,7 @@ router.get('/active-users', async (req, res) => {
       };
     });
 
-    res.status(200).json({
-      total: enriched.length,
-      funders: enriched
-    });
+    res.status(200).json({ total: enriched.length, funders: enriched });
   } catch (error) {
     console.error('Active Users Error:', error);
     res.status(500).json({ message: 'Server Error' });
@@ -175,7 +168,7 @@ router.get('/active-users', async (req, res) => {
 });
 
 // ==========================================
-// 5. GET /api/admin/funders/me/:id  (Dashboard poll)
+// 5. GET /api/admin/funders/me/:id
 // ==========================================
 router.get('/me/:id', async (req, res) => {
   try {
@@ -206,7 +199,7 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // Never let admin overwrite financial fields
+    // Never overwrite financial fields
     delete updateData.totalBalance;
     delete updateData.todayEarnings;
     delete updateData.yesterdayEarnings;
@@ -250,7 +243,7 @@ router.post('/withdraw/:id', async (req, res) => {
     const { password: _, ...funderProfile } = funder.toObject();
     res.status(200).json({
       message: `₹${withdrawAmount} withdrawal processed.`,
-      funder: funderProfile
+      funder:  funderProfile
     });
   } catch (error) {
     console.error('Withdraw Error:', error);
@@ -258,4 +251,10 @@ router.post('/withdraw/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// ✅ EXPORT BOTH router AND creditAllFunders
+//    This was the bug — module.exports = router
+//    was wiping out the creditAllFunders export
+// ==========================================
 module.exports = router;
+module.exports.creditAllFunders = creditAllFunders;
