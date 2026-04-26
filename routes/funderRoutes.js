@@ -4,8 +4,8 @@ const Funder = require('../models/Funder');
 
 // ==========================================
 // EXPORTED CRON FUNCTION
-// Called by the 12pm IST cron job in Server.js
-// Credits every active, non-expired funder instantly.
+// Called by the midnight IST cron job in Server.js
+// Credits every active, non-expired funder.
 // ==========================================
 const creditAllFunders = async () => {
   try {
@@ -24,11 +24,11 @@ const creditAllFunders = async () => {
 
       const credit = funder.dailyCredit;
 
-      funder.yesterdayEarnings = funder.todayEarnings; // shift display
-      funder.todayEarnings     = credit;               // today's credit badge
-      funder.totalBalance      = (funder.totalBalance || 0) + credit; // ✅ immediately withdrawable
+      funder.yesterdayEarnings = funder.todayEarnings;
+      funder.todayEarnings     = credit;
+      funder.totalBalance      = (funder.totalBalance  || 0) + credit;
       funder.allTimeEarnings   = (funder.allTimeEarnings || 0) + credit;
-      funder.creditDays        = (funder.creditDays || 0) + 1;
+      funder.creditDays        = (funder.creditDays    || 0) + 1;
       funder.lastCreditDate    = now;
 
       await funder.save();
@@ -89,7 +89,7 @@ router.post('/login', async (req, res) => {
     if (new Date(funder.validUntil) < today) {
       return res.status(403).json({ message: 'Your plan has expired. Please contact admin.' });
     }
-    if (!funder.isActive)            return res.status(403).json({ message: 'Account deactivated.' });
+    if (!funder.isActive)             return res.status(403).json({ message: 'Account deactivated.' });
     if (password !== funder.password) return res.status(400).json({ message: 'Incorrect password.' });
 
     const { password: _, ...funderProfile } = funder.toObject();
@@ -101,7 +101,7 @@ router.post('/login', async (req, res) => {
 });
 
 // ==========================================
-// 3. GET /api/admin/funders  (Admin)
+// 3. GET /api/admin/funders  (Admin list)
 // ==========================================
 router.get('/', async (req, res) => {
   try {
@@ -117,7 +117,79 @@ router.get('/', async (req, res) => {
 });
 
 // ==========================================
-// 4. PUT /api/admin/funders/:id  (Admin edit only)
+// 4. GET /api/admin/funders/active-users  ← MUST BE BEFORE /:id
+// Returns all active funders with full financial details
+// ==========================================
+router.get('/active-users', async (req, res) => {
+  try {
+    const funders = await Funder.find({ isActive: true })
+      .select('-password')
+      .sort({ createdAt: -1 });
+
+    const now = new Date();
+
+    const enriched = funders.map(f => {
+      const validUntil = new Date(f.validUntil);
+      const daysLeft   = Math.ceil((validUntil - now) / (1000 * 60 * 60 * 24));
+      const isExpired  = validUntil < now;
+
+      // creditedToday: compare in IST
+      const istOffset  = 5.5 * 60 * 60 * 1000;
+      const creditedToday = f.lastCreditDate
+        ? new Date(new Date(f.lastCreditDate).getTime() + istOffset).toDateString() ===
+          new Date(now.getTime() + istOffset).toDateString()
+        : false;
+
+      return {
+        _id:               f._id,
+        name:              f.name,
+        email:             f.email,
+        phoneNumber:       f.phoneNumber,
+        storeName:         f.storeName,
+        upiId:             f.upiId,
+        planType:          f.planType,
+        dailyCredit:       f.dailyCredit,
+        minimumWithdrawal: f.minimumWithdrawal,
+        validUntil:        f.validUntil,
+        daysLeft:          isExpired ? 0 : daysLeft,
+        isExpired,
+        totalBalance:      Number(f.totalBalance      || 0),
+        todayEarnings:     Number(f.todayEarnings     || 0),
+        yesterdayEarnings: Number(f.yesterdayEarnings || 0),
+        allTimeEarnings:   Number(f.allTimeEarnings   || 0),
+        creditDays:        Number(f.creditDays        || 0),
+        lastCreditDate:    f.lastCreditDate,
+        creditedToday,
+        createdAt:         f.createdAt,
+      };
+    });
+
+    res.status(200).json({
+      total: enriched.length,
+      funders: enriched
+    });
+  } catch (error) {
+    console.error('Active Users Error:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+// ==========================================
+// 5. GET /api/admin/funders/me/:id  (Dashboard poll)
+// ==========================================
+router.get('/me/:id', async (req, res) => {
+  try {
+    const funder = await Funder.findById(req.params.id).select('-password');
+    if (!funder) return res.status(404).json({ message: 'Funder not found' });
+    res.status(200).json({ funder });
+  } catch (error) {
+    console.error('Get Funder Profile Error:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+});
+
+// ==========================================
+// 6. PUT /api/admin/funders/:id  (Admin edit)
 // ==========================================
 router.put('/:id', async (req, res) => {
   try {
@@ -126,7 +198,6 @@ router.put('/:id', async (req, res) => {
     const funder = await Funder.findById(req.params.id);
     if (!funder) return res.status(404).json({ message: 'Funder not found' });
 
-    // Recalculate plan values if plan changes
     if (updateData.planType && updateData.planType !== funder.planType) {
       if (updateData.planType === '10k') {
         updateData.dailyCredit = 200; updateData.minimumWithdrawal = 1000;
@@ -135,7 +206,7 @@ router.put('/:id', async (req, res) => {
       }
     }
 
-    // 🔒 Never let admin accidentally overwrite financial fields
+    // Never let admin overwrite financial fields
     delete updateData.totalBalance;
     delete updateData.todayEarnings;
     delete updateData.yesterdayEarnings;
@@ -157,22 +228,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // ==========================================
-// 5. GET /api/admin/funders/me/:id  (Dashboard poll — every 60s)
-// ==========================================
-router.get('/me/:id', async (req, res) => {
-  try {
-    const funder = await Funder.findById(req.params.id).select('-password');
-    if (!funder) return res.status(404).json({ message: 'Funder not found' });
-    res.status(200).json({ funder });
-  } catch (error) {
-    console.error('Get Funder Profile Error:', error);
-    res.status(500).json({ message: 'Server Error' });
-  }
-});
-
-// ==========================================
-// 6. POST /api/admin/funders/withdraw/:id
-//    Deducts from totalBalance immediately
+// 7. POST /api/admin/funders/withdraw/:id
 // ==========================================
 router.post('/withdraw/:id', async (req, res) => {
   try {
@@ -188,7 +244,6 @@ router.post('/withdraw/:id', async (req, res) => {
     if (withdrawAmount > funder.totalBalance)
       return res.status(400).json({ message: 'Insufficient balance.' });
 
-    // ✅ Deduct immediately from totalBalance
     funder.totalBalance = funder.totalBalance - withdrawAmount;
     await funder.save();
 
@@ -199,60 +254,6 @@ router.post('/withdraw/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Withdraw Error:', error);
-    res.status(500).json({ message: 'Server Error' });
-  }
-});
-
-
-// ==========================================
-// 7. GET /api/admin/funders/active-users
-//    Returns all active funders with full financial details
-// ==========================================
-router.get('/active-users', async (req, res) => {
-  try {
-    const funders = await Funder.find({ isActive: true })
-      .select('-password')
-      .sort({ createdAt: -1 });
-
-    const now = new Date();
-
-    const enriched = funders.map(f => {
-      const validUntil   = new Date(f.validUntil);
-      const daysLeft     = Math.ceil((validUntil - now) / (1000 * 60 * 60 * 24));
-      const isExpired    = validUntil < now;
-
-      return {
-        _id:               f._id,
-        name:              f.name,
-        email:             f.email,
-        phoneNumber:       f.phoneNumber,
-        storeName:         f.storeName,
-        upiId:             f.upiId,
-        planType:          f.planType,
-        dailyCredit:       f.dailyCredit,
-        minimumWithdrawal: f.minimumWithdrawal,
-        validUntil:        f.validUntil,
-        daysLeft:          isExpired ? 0 : daysLeft,
-        isExpired,
-        totalBalance:      Number(f.totalBalance      || 0),
-        todayEarnings:     Number(f.todayEarnings     || 0),
-        yesterdayEarnings: Number(f.yesterdayEarnings || 0),
-        allTimeEarnings:   Number(f.allTimeEarnings   || 0),
-        creditDays:        Number(f.creditDays        || 0),
-        lastCreditDate:    f.lastCreditDate,
-        creditedToday:     f.lastCreditDate
-          ? new Date(f.lastCreditDate).toDateString() === now.toDateString()
-          : false,
-        createdAt:         f.createdAt,
-      };
-    });
-
-    res.status(200).json({ 
-      total: enriched.length,
-      funders: enriched 
-    });
-  } catch (error) {
-    console.error('Active Users Error:', error);
     res.status(500).json({ message: 'Server Error' });
   }
 });
