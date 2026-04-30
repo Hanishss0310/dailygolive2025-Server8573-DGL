@@ -92,23 +92,16 @@ const generateInvoicePDF = (orderData, invoiceNo, filePath) => {
 // ✅ ROUTES
 // ==========================================
 
-// 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST Reset Fixed)
 // 1. GET ALL SYSTEM ORDERS PLACED TODAY (IST FIXED)
 router.get('/today', async (req, res) => {
   try {
-    // 1. Get current time in UTC
     const now = new Date();
-    
-    // 2. Convert to IST (UTC + 5.5 hours)
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istTime = new Date(now.getTime() + istOffset);
     
-    // 3. Define the START of today in IST
     const startOfIstDay = new Date(istTime.getFullYear(), istTime.getMonth(), istTime.getDate());
-    // Subtract the offset back to compare correctly with MongoDB UTC timestamps
     const startOfTodayUTC = new Date(startOfIstDay.getTime() - istOffset);
 
-    // 4. Define the END of today in IST
     const endOfIstDay = new Date(istTime.getFullYear(), istTime.getMonth(), istTime.getDate(), 23, 59, 59, 999);
     const endOfTodayUTC = new Date(endOfIstDay.getTime() - istOffset);
 
@@ -183,10 +176,17 @@ router.post('/', upload, async (req, res) => {
   }
 });
 
-// 4. GET ALL ORDERS
+// 4. GET ALL ORDERS (Safely updated with optional FOS and Date filters)
 router.get('/', async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
+    const { fosName, date } = req.query;
+    let filterQuery = {};
+
+    // If delivery app sends filters, apply them. Otherwise, ignore.
+    if (fosName) filterQuery['customerDetails.fos'] = fosName;
+    if (date) filterQuery['orderDate'] = { $regex: date, $options: 'i' };
+
+    const orders = await Order.find(filterQuery).sort({ createdAt: -1 });
     res.status(200).json(orders);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch orders" });

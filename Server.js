@@ -27,6 +27,7 @@ app.use(hpp({ whitelist: ["sort", "filter"] }));
 const allowedOrigins = [
   "http://localhost:3000",
   "http://localhost:3001",
+  "http://localhost:4000",
   "https://dailygolive.in",
   "https://www.dailygolive.in",
   "https://dailygo-userside-app.firebaseapp.com",
@@ -34,7 +35,11 @@ const allowedOrigins = [
   "https://daily-fo26lbgolive-8-admin56-g.firebaseapp.com",
   "https://daily-fo26lbgolive-8-admin56-g.web.app",
   "https://dailygo-funders-program.web.app",
-  "https://dailygo-funders-program.firebaseapp.com"
+  "https://dailygo-funders-program.firebaseapp.com",
+  
+  // 🔥 ADD THESE TWO NEW LINES FOR THE DELIVERY APP
+  "https://dailygodelivery-b5396.firebaseapp.com",
+  "https://dailygodelivery-b5396.web.app" 
 ];
 
 app.use(cors({
@@ -64,16 +69,18 @@ app.use("/api/", limiter);
 // ==========================================
 // 4. ROUTES
 // ==========================================
-const newsletterRoutes = require("./routes/newsletterRoutes");
-const contactRoutes    = require("./routes/contactRoutes");
-const galleryRoutes    = require("./routes/galleryRoutes");
-const blogRoutes       = require("./routes/blogRoutes");
-const joinusRoutes     = require("./routes/joinusRoutes");
-const analyticsRoutes  = require("./routes/analyticsRoutes");
-const productRoutes    = require("./routes/productRoutes");
-const orderRoutes      = require("./routes/orderRoutes");
-const funderRoutes     = require("./routes/funderRoutes");
-const withdrawalRoutes = require("./routes/withdrawalRoutes");
+const newsletterRoutes   = require("./routes/newsletterRoutes");
+const contactRoutes      = require("./routes/contactRoutes");
+const galleryRoutes      = require("./routes/galleryRoutes");
+const blogRoutes         = require("./routes/blogRoutes");
+const joinusRoutes       = require("./routes/joinusRoutes");
+const analyticsRoutes    = require("./routes/analyticsRoutes");
+const productRoutes      = require("./routes/productRoutes");
+const orderRoutes        = require("./routes/orderRoutes");
+const funderRoutes       = require("./routes/funderRoutes");
+const withdrawalRoutes   = require("./routes/withdrawalRoutes");
+const deliveryAuthRoutes = require("./routes/deliveryAuth"); // ✅ Added Delivery Auth Import
+const deliveryActionsRoutes = require('./routes/deliveryActions'); // (or whatever you named the file)
 
 // ✅ Import cron function from funderRoutes
 const { creditAllFunders } = require("./routes/funderRoutes");
@@ -88,6 +95,8 @@ app.use("/api/products",      productRoutes);
 app.use("/api/orders",        orderRoutes);
 app.use("/api/withdrawals",   withdrawalRoutes);
 app.use("/api/admin/funders", funderRoutes);
+app.use("/api/delivery",      deliveryAuthRoutes); // ✅ Mounted Delivery Auth Route
+app.use('/api/delivery-actions', deliveryActionsRoutes);
 
 // Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
