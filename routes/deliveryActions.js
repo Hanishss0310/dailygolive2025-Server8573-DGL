@@ -62,4 +62,16 @@ router.post('/update-status', async (req, res) => {
   }
 });
 
+// 3. GET All Submitted Delivery Reports (Delivery History)
+router.get('/history', async (req, res) => {
+  try {
+    // Fetch all logs from the DeliveryOrder database, newest first
+    const deliveryHistory = await DeliveryOrder.find().sort({ createdAt: -1 });
+    res.status(200).json(deliveryHistory);
+  } catch (error) {
+    console.error("History fetch error:", error);
+    res.status(500).json({ error: "Failed to fetch delivery history" });
+  }
+});
+
 module.exports = router;
