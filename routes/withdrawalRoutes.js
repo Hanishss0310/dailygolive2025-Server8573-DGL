@@ -1,74 +1,73 @@
 const express = require('express');
 const router = express.Router();
 const Withdrawal = require('../models/Withdrawal');
-const Funder = require('../models/Funder'); // ✅ MUST IMPORT FUNDER MODEL
+const Funder = require('../models/Funder');
 
-router.post('/request', async (req, res) => {
-  // ✅ 1. Only extract the exact fields you expect (prevents injection attacks)
-  const { funderId, amount, upiId, name, email, phoneNumber } = req.body;
+// ─── POST /api/admin/funders/withdraw/:id ─────────────────────────────────────
+// Matches the frontend: fetch(`/api/admin/funders/withdraw/${funder._id}`)
+router.post('/withdraw/:id', async (req, res) => {
+  const { amount } = req.body;
+  const funderId = req.params.id;
 
   try {
-    // ✅ 2. Find the Funder in the database
+    // 1. Find funder in DB — never trust frontend balance
     const funder = await Funder.findById(funderId);
     if (!funder) {
-      return res.status(404).json({ message: "Funder account not found." });
+      return res.status(404).json({ message: 'Funder account not found.' });
     }
 
-    // ✅ 3. SERVER-SIDE VALIDATION (Never trust the frontend!)
-    const dbTotal = Number(funder.totalBalance || 0);
-    const dbYesterday = Number(funder.yesterdayEarnings || 0);
-    const maxWithdrawable = dbTotal + dbYesterday;
+    // 2. Server-side validation
+    const parsedAmount = Number(amount);
+    const totalBalance = Number(funder.totalBalance || 0);
+    const minimumWithdrawal = Number(funder.minimumWithdrawal || 1000);
 
-    if (amount < 10) {
-      return res.status(400).json({ message: "Minimum withdrawal is ₹10." });
+    if (!parsedAmount || parsedAmount <= 0) {
+      return res.status(400).json({ message: 'Enter a valid amount.' });
     }
-    if (amount > maxWithdrawable) {
-      return res.status(400).json({ message: "Insufficient balance! Nice try, hacker." });
+    if (parsedAmount < minimumWithdrawal) {
+      return res.status(400).json({ message: `Minimum withdrawal is ₹${minimumWithdrawal}.` });
     }
-
-    // ✅ 4. DEDUCT THE MONEY FROM THE DATABASE
-    // Subtract from yesterdayEarnings first, then totalBalance
-    if (amount <= funder.yesterdayEarnings) {
-      funder.yesterdayEarnings -= amount;
-    } else {
-      const remainingAmountToDeduct = amount - funder.yesterdayEarnings;
-      funder.yesterdayEarnings = 0;
-      funder.totalBalance -= remainingAmountToDeduct;
+    if (parsedAmount > totalBalance) {
+      return res.status(400).json({ message: 'Insufficient withdrawable balance.' });
+    }
+    if (!funder.upiId) {
+      return res.status(400).json({ message: 'UPI ID not found on your profile.' });
     }
 
-    // Save the new, lower balance to the user's account
+    // 3. Deduct from totalBalance (single source of truth)
+    funder.totalBalance = totalBalance - parsedAmount;
     await funder.save();
 
-    // ✅ 5. Create the Withdrawal Request Safely
-    // Notice how we explicitly build the object instead of using req.body
-    const newRequest = new Withdrawal({
-      funderId,
-      name,
-      email,
-      phoneNumber,
-      upiId,
-      amount,
-      status: "Pending", // Force the status to Pending on the backend
-      requestDate: new Date()
+    // 4. Create withdrawal record
+    await Withdrawal.create({
+      funderId: funder._id,
+      name: funder.name,
+      email: funder.email,
+      phoneNumber: funder.phoneNumber,
+      upiId: funder.upiId,
+      amount: parsedAmount,
+      status: 'Pending',
     });
 
-    await newRequest.save();
+    // 5. Return updated funder so frontend can update state immediately
+    res.status(201).json({
+      message: 'Withdrawal request submitted successfully.',
+      funder,          // ← frontend does: setFunder(data.funder)
+    });
 
-    res.status(201).json({ message: "Withdrawal request saved and balance updated successfully" });
   } catch (error) {
-    console.error("Withdrawal Error:", error);
-    res.status(500).json({ message: "Failed to submit request due to server error" });
+    console.error('Withdrawal Error:', error);
+    res.status(500).json({ message: 'Server error. Please try again later.' });
   }
 });
 
-// Add this inside your routes/withdrawalRoutes.js
+// ─── GET /api/admin/funders/withdraw/all ─────────────────────────────────────
 router.get('/all', async (req, res) => {
   try {
-    // Fetches all withdrawals, sorted by newest first
     const requests = await Withdrawal.find().sort({ createdAt: -1 });
     res.status(200).json({ requests });
   } catch (error) {
-    res.status(500).json({ message: "Failed to fetch withdrawals" });
+    res.status(500).json({ message: 'Failed to fetch withdrawals.' });
   }
 });
 
