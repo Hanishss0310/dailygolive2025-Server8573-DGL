@@ -36,25 +36,25 @@ const allowedOrigins = [
   "https://daily-fo26lbgolive-8-admin56-g.web.app",
   "https://dailygo-funders-program.web.app",
   "https://dailygo-funders-program.firebaseapp.com",
-  
-  // 🔥 ADD THESE TWO NEW LINES FOR THE DELIVERY APP
   "https://dailygodelivery-b5396.firebaseapp.com",
-  "https://dailygodelivery-b5396.web.app" 
+  "https://dailygodelivery-b5396.web.app",
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.log("❌ Blocked Origin:", origin);
-      callback(new Error("❌ Not allowed by CORS"));
-    }
-  },
-  methods:        ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials:    true,
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.log("❌ Blocked Origin:", origin);
+        callback(new Error("❌ Not allowed by CORS"));
+      }
+    },
+    methods:        ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials:    true,
+  })
+);
 
 // ==========================================
 // 3. RATE LIMITING
@@ -62,79 +62,92 @@ app.use(cors({
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max:      1000,
-  message:  { error: "Too many requests, please try again later." }
+  message:  { error: "Too many requests, please try again later." },
 });
 app.use("/api/", limiter);
 
 // ==========================================
-// 4. ROUTES
+// 4. ROUTES — import all routers
 // ==========================================
-const newsletterRoutes   = require("./routes/newsletterRoutes");
-const contactRoutes      = require("./routes/contactRoutes");
-const galleryRoutes      = require("./routes/galleryRoutes");
-const blogRoutes         = require("./routes/blogRoutes");
-const joinusRoutes       = require("./routes/joinusRoutes");
-const analyticsRoutes    = require("./routes/analyticsRoutes");
-const productRoutes      = require("./routes/productRoutes");
-const orderRoutes        = require("./routes/orderRoutes");
-const funderRoutes       = require("./routes/funderRoutes");
-const withdrawalRoutes   = require("./routes/withdrawalRoutes");
-const deliveryAuthRoutes = require("./routes/deliveryAuth"); // ✅ Added Delivery Auth Import
-const deliveryActionsRoutes = require('./routes/deliveryActions'); // (or whatever you named the file)
+const newsletterRoutes      = require("./routes/newsletterRoutes");
+const contactRoutes         = require("./routes/contactRoutes");
+const galleryRoutes         = require("./routes/galleryRoutes");
+const blogRoutes            = require("./routes/blogRoutes");
+const joinusRoutes          = require("./routes/joinusRoutes");
+const analyticsRoutes       = require("./routes/analyticsRoutes");
+const productRoutes         = require("./routes/productRoutes");
+const orderRoutes           = require("./routes/orderRoutes");
+const funderRoutes          = require("./routes/funderRoutes");
+const withdrawalRoutes      = require("./routes/withdrawalRoutes");
+const deliveryAuthRoutes    = require("./routes/deliveryAuth");
+const deliveryActionsRoutes = require("./routes/deliveryActions");
 
 // ✅ Import cron function from funderRoutes
 const { creditAllFunders } = require("./routes/funderRoutes");
 
-app.use("/api/newsletter",    newsletterRoutes);
-app.use("/api/contact",       contactRoutes);
-app.use("/api/gallery",       galleryRoutes);
-app.use("/api/blogs",         blogRoutes);
-app.use("/api/joinus",        joinusRoutes);
-app.use("/api/analytics",     analyticsRoutes);
-app.use("/api/products",      productRoutes);
-app.use("/api/orders",        orderRoutes);
-app.use("/api/withdrawals",   withdrawalRoutes);
-app.use("/api/admin/funders", funderRoutes);
-app.use("/api/delivery",      deliveryAuthRoutes); // ✅ Mounted Delivery Auth Route
-app.use('/api/delivery-actions', deliveryActionsRoutes);
+// ==========================================
+// 5. MOUNT ROUTES
+// ==========================================
+app.use("/api/newsletter",      newsletterRoutes);
+app.use("/api/contact",         contactRoutes);
+app.use("/api/gallery",         galleryRoutes);
+app.use("/api/blogs",           blogRoutes);
+app.use("/api/joinus",          joinusRoutes);
+app.use("/api/analytics",       analyticsRoutes);
+app.use("/api/products",        productRoutes);
+app.use("/api/orders",          orderRoutes);
+app.use("/api/delivery",        deliveryAuthRoutes);
+app.use("/api/delivery-actions", deliveryActionsRoutes);
+
+// ✅ FIX: Both funderRoutes and withdrawalRoutes mounted under /api/admin/funders
+//
+//   funderRoutes    handles: /me/:id, /login, /register, etc.
+//   withdrawalRoutes handles: /withdraw/:id  (POST)
+//                             /withdraw/all  (GET)  ← frontend calls this
+//
+//   OLD (broken):
+//     app.use("/api/withdrawals",   withdrawalRoutes)  → /api/withdrawals/all
+//     app.use("/api/admin/funders", funderRoutes)      → no withdrawal routes here
+//
+//   NEW (fixed):
+//     app.use("/api/admin/funders", withdrawalRoutes)  → /api/admin/funders/withdraw/all ✅
+//     app.use("/api/admin/funders", funderRoutes)      → /api/admin/funders/me/:id ✅
+//
+//   IMPORTANT: withdrawalRoutes MUST be mounted BEFORE funderRoutes
+//   because withdrawalRoutes has GET /withdraw/all (static)
+//   and funderRoutes may have dynamic /:id style routes that would
+//   intercept /withdraw/all if registered first.
+app.use("/api/admin/funders", withdrawalRoutes);  // ← mount FIRST (static /withdraw/all)
+app.use("/api/admin/funders", funderRoutes);      // ← mount SECOND (dynamic routes)
 
 // Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ==========================================
-// 5. DATABASE
+// 6. DATABASE + CRON
 // ==========================================
 mongoose
   .connect("mongodb://127.0.0.1:27017/dailygoDB")
   .then(() => {
     console.log("✅ MongoDB Connected: dailygoDB");
 
-    // ==========================================
-    // 6. CRON JOB — Midnight IST every day
-    //
-    //  Server is UTC. IST = UTC + 5:30
-    //  Midnight IST (00:00) = 18:30 UTC
-    //
-    //  node-cron v4: pass scheduledTimeZone in options object
-    //  '30 18 * * *' UTC = exactly 00:00 IST
-    // ==========================================
+    // ─── Cron Job — Midnight IST every day ───────────────────────────────
+    // Server is UTC. IST = UTC + 5:30
+    // Midnight IST (00:00) = 18:30 UTC → cron: '30 18 * * *'
     cron.schedule("30 18 * * *", async () => {
       const istTime = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
-      console.log(`🕛 Midnight IST! Server UTC: ${new Date().toISOString()} | IST: ${istTime}`);
+      console.log(`🕛 Midnight IST! UTC: ${new Date().toISOString()} | IST: ${istTime}`);
       console.log("💰 Running daily funder credit...");
       await creditAllFunders();
     });
-    // No timezone option — schedule written directly in UTC so no conversion needed.
-    // Server is UTC → '30 18 * * *' fires at 18:30 UTC = 00:00 IST. Simple and reliable.
 
-    console.log("✅ Cron scheduled: funders credited at 18:30 UTC = 00:00 IST midnight every day");
+    console.log("✅ Cron scheduled: funders credited at 18:30 UTC = 00:00 IST every day");
 
-    // ── Log time info on startup so you can verify ──
     const nowUTC = new Date();
     const nowIST = nowUTC.toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
     console.log(`🕐 Server UTC now : ${nowUTC.toISOString()}`);
     console.log(`🕐 IST now        : ${nowIST}`);
-    console.log(`⏳ Next cron fires: today/tomorrow at 18:30 UTC (00:00 IST)`);
+    console.log(`⏳ Next cron fires : today/tomorrow at 18:30 UTC (00:00 IST)`);
   })
   .catch((err) => console.log("❌ Mongo Error:", err));
 
@@ -145,7 +158,7 @@ app.get("/", (req, res) => {
   res.send("🚀 DailyGo API is Active");
 });
 
-// ✅ Manual trigger — for testing, remove in production
+// Manual trigger for testing — remove in production
 app.post("/api/admin/trigger-credit", async (req, res) => {
   try {
     console.log("🔧 Manual credit trigger hit");
@@ -162,7 +175,7 @@ app.post("/api/admin/trigger-credit", async (req, res) => {
 
 // 404
 app.use((req, res, next) => {
-  console.log(`404 attempted on: ${req.method} ${req.url}`);
+  console.log(`404 attempted: ${req.method} ${req.url}`);
   res.status(404).json({
     error:        "Route not found",
     attemptedUrl: req.url,
@@ -184,8 +197,8 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`
   🚀 Server Running!
-  🏠 Local:  http://localhost:${PORT}
-  🔗 API:    http://localhost:${PORT}/api/admin/funders/login
-  🕛 Cron:   18:30 UTC daily = 00:00 IST midnight
+  🏠 Local : http://localhost:${PORT}
+  🔗 API   : http://localhost:${PORT}/api/admin/funders/login
+  🕛 Cron  : 18:30 UTC daily = 00:00 IST midnight
   `);
 });
