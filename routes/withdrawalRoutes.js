@@ -3,8 +3,23 @@ const router = express.Router();
 const Withdrawal = require('../models/Withdrawal');
 const Funder = require('../models/Funder');
 
+// ─── GET /api/admin/funders/withdraw/all ──────────────────────────────────────
+// FIX: was router.get('/all') → resolved to /api/admin/funders/all (404)
+//      now router.get('/withdraw/all') → resolves to /api/admin/funders/withdraw/all ✅
+// IMPORTANT: Must be defined BEFORE the POST /withdraw/:id route
+//            so Express doesn't treat "all" as an :id param
+router.get('/withdraw/all', async (req, res) => {
+  try {
+    const requests = await Withdrawal.find().sort({ createdAt: -1 });
+    res.status(200).json({ requests });
+  } catch (error) {
+    console.error('Fetch withdrawals error:', error);
+    res.status(500).json({ message: 'Failed to fetch withdrawals.' });
+  }
+});
+
 // ─── POST /api/admin/funders/withdraw/:id ─────────────────────────────────────
-// Matches the frontend: fetch(`/api/admin/funders/withdraw/${funder._id}`)
+// Matches frontend: fetch(`/api/admin/funders/withdraw/${funder._id}`, { method: 'POST' })
 router.post('/withdraw/:id', async (req, res) => {
   const { amount } = req.body;
   const funderId = req.params.id;
@@ -17,8 +32,8 @@ router.post('/withdraw/:id', async (req, res) => {
     }
 
     // 2. Server-side validation
-    const parsedAmount = Number(amount);
-    const totalBalance = Number(funder.totalBalance || 0);
+    const parsedAmount      = Number(amount);
+    const totalBalance      = Number(funder.totalBalance      || 0);
     const minimumWithdrawal = Number(funder.minimumWithdrawal || 1000);
 
     if (!parsedAmount || parsedAmount <= 0) {
@@ -40,34 +55,24 @@ router.post('/withdraw/:id', async (req, res) => {
 
     // 4. Create withdrawal record
     await Withdrawal.create({
-      funderId: funder._id,
-      name: funder.name,
-      email: funder.email,
+      funderId:    funder._id,
+      name:        funder.name,
+      email:       funder.email,
       phoneNumber: funder.phoneNumber,
-      upiId: funder.upiId,
-      amount: parsedAmount,
-      status: 'Pending',
+      upiId:       funder.upiId,
+      amount:      parsedAmount,
+      status:      'Pending',
     });
 
     // 5. Return updated funder so frontend can update state immediately
     res.status(201).json({
       message: 'Withdrawal request submitted successfully.',
-      funder,          // ← frontend does: setFunder(data.funder)
+      funder,   // ← frontend does: setFunder(data.funder)
     });
 
   } catch (error) {
     console.error('Withdrawal Error:', error);
     res.status(500).json({ message: 'Server error. Please try again later.' });
-  }
-});
-
-// ─── GET /api/admin/funders/withdraw/all ─────────────────────────────────────
-router.get('/all', async (req, res) => {
-  try {
-    const requests = await Withdrawal.find().sort({ createdAt: -1 });
-    res.status(200).json({ requests });
-  } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch withdrawals.' });
   }
 });
 
