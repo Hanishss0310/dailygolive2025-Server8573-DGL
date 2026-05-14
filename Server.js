@@ -81,7 +81,10 @@ const funderRoutes          = require("./routes/funderRoutes");
 const withdrawalRoutes      = require("./routes/withdrawalRoutes");
 const deliveryAuthRoutes    = require("./routes/deliveryAuth");
 const deliveryActionsRoutes = require("./routes/deliveryActions");
-const authRoutes            = require("./routes/authRoutes"); // ← Add this line
+
+// ✅ Import our new Auth Routes
+const authRoutes            = require("./routes/authRoutes"); 
+
 // ✅ Import cron function from funderRoutes
 const { creditAllFunders } = require("./routes/funderRoutes");
 
@@ -98,7 +101,9 @@ app.use("/api/products",        productRoutes);
 app.use("/api/orders",          orderRoutes);
 app.use("/api/delivery",        deliveryAuthRoutes);
 app.use("/api/delivery-actions", deliveryActionsRoutes);
-app.use("/api/admin/funders/auth", authRoutes); // ← Mount auth routes under /api/admin/funders/auth
+
+// ✅ FIX: Changed from "/api/admin/funders/auth" to "/api/auth" to match React Frontend
+app.use("/api/auth",            authRoutes); 
 
 app.use("/api/admin/funders", withdrawalRoutes);  // ← mount FIRST (static /withdraw/all)
 app.use("/api/admin/funders", funderRoutes);      // ← mount SECOND (dynamic routes)
@@ -181,7 +186,7 @@ app.listen(PORT, () => {
   console.log(`
   🚀 Server Running!
   🏠 Local : http://localhost:${PORT}
-  🔗 API   : http://localhost:${PORT}/api/admin/funders/login
+  🔗 API   : http://localhost:${PORT}/api/auth/login
   🕛 Cron  : 18:30 UTC daily = 00:00 IST midnight
   `);
 });
