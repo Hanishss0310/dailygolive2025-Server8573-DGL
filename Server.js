@@ -81,7 +81,7 @@ const funderRoutes          = require("./routes/funderRoutes");
 const withdrawalRoutes      = require("./routes/withdrawalRoutes");
 const deliveryAuthRoutes    = require("./routes/deliveryAuth");
 const deliveryActionsRoutes = require("./routes/deliveryActions");
-
+const authRoutes            = require("./routes/authRoutes"); // ← Add this line
 // ✅ Import cron function from funderRoutes
 const { creditAllFunders } = require("./routes/funderRoutes");
 
@@ -98,25 +98,8 @@ app.use("/api/products",        productRoutes);
 app.use("/api/orders",          orderRoutes);
 app.use("/api/delivery",        deliveryAuthRoutes);
 app.use("/api/delivery-actions", deliveryActionsRoutes);
+app.use("/api/admin/funders/auth", authRoutes); // ← Mount auth routes under /api/admin/funders/auth
 
-// ✅ FIX: Both funderRoutes and withdrawalRoutes mounted under /api/admin/funders
-//
-//   funderRoutes    handles: /me/:id, /login, /register, etc.
-//   withdrawalRoutes handles: /withdraw/:id  (POST)
-//                             /withdraw/all  (GET)  ← frontend calls this
-//
-//   OLD (broken):
-//     app.use("/api/withdrawals",   withdrawalRoutes)  → /api/withdrawals/all
-//     app.use("/api/admin/funders", funderRoutes)      → no withdrawal routes here
-//
-//   NEW (fixed):
-//     app.use("/api/admin/funders", withdrawalRoutes)  → /api/admin/funders/withdraw/all ✅
-//     app.use("/api/admin/funders", funderRoutes)      → /api/admin/funders/me/:id ✅
-//
-//   IMPORTANT: withdrawalRoutes MUST be mounted BEFORE funderRoutes
-//   because withdrawalRoutes has GET /withdraw/all (static)
-//   and funderRoutes may have dynamic /:id style routes that would
-//   intercept /withdraw/all if registered first.
 app.use("/api/admin/funders", withdrawalRoutes);  // ← mount FIRST (static /withdraw/all)
 app.use("/api/admin/funders", funderRoutes);      // ← mount SECOND (dynamic routes)
 
