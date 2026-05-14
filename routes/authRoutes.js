@@ -18,8 +18,8 @@ const otpStore = {};
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'your_sending_email@gmail.com', // Replace with your email
-    pass: 'your_google_app_password'      // Replace with your 16-character App Password
+    user: 'onotreply.dailygolive@gmail.com', // Replace with your email
+    pass: 'obpl mptx lfkh ebcf'      // Replace with your 16-character App Password
   }
 });
 
@@ -39,7 +39,7 @@ router.post('/login', async (req, res) => {
 
   // Send Email
   const mailOptions = {
-    from: 'your_sending_email@gmail.com',
+    from: 'donotreply.dailygolive@gmail.com',
     to: email,
     subject: 'Daily Go Live - Admin Login OTP',
     html: `
