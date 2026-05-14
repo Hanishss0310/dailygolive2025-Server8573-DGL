@@ -18,7 +18,7 @@ const otpStore = {};
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'onotreply.dailygolive@gmail.com', // Replace with your email
+    user: 'donotreply.dailygolive@gmail.com', // Replace with your email
     pass: 'obpl mptx lfkh ebcf'      // Replace with your 16-character App Password
   }
 });
