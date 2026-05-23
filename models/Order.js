@@ -2,10 +2,14 @@ const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema(
   {
+    // ================= BASIC ORDER INFO =================
     invoiceNo: String,
+
     orderDate: String,
+
     location: String,
 
+    // ================= CUSTOMER DETAILS =================
     customerDetails: {
       shopName: String,
       ownerName: String,
@@ -14,6 +18,7 @@ const orderSchema = new mongoose.Schema(
       fos: String
     },
 
+    // ================= ORDER ITEMS =================
     items: [
       {
         id: String,
@@ -23,20 +28,62 @@ const orderSchema = new mongoose.Schema(
       }
     ],
 
+    // ================= PAYMENT DETAILS =================
     payment: {
+      // Existing fields (KEEP FOR COMPATIBILITY)
       method: String,
-      type: { type: String }, 
-      amountPaid: Number,
+
+      type: {
+        type: String
+      },
+
+      amountPaid: {
+        type: Number,
+        default: 0
+      },
+
       transactionId: String,
-      balance: Number,
-      // 🔥 NEW: Added status field with a default value
-      status: { 
-        type: String, 
+
+      balance: {
+        type: Number,
+        default: 0
+      },
+
+      // ================= DELIVERY STATUS =================
+      status: {
+        type: String,
         enum: ['due', 'partially_paid', 'completed', 'overdue'],
-        default: 'due' 
+        default: 'due'
+      },
+
+      // ================= NEW SAFE TRACKING FIELDS =================
+
+      // Total bill amount
+      totalAmount: {
+        type: Number,
+        default: 0
+      },
+
+      // Running paid amount
+      paidAmount: {
+        type: Number,
+        default: 0
+      },
+
+      // Remaining amount
+      pendingAmount: {
+        type: Number,
+        default: 0
+      },
+
+      // Last payment update date
+      lastPaymentDate: {
+        type: Date,
+        default: null
       }
     },
 
+    // ================= TOTALS =================
     totals: {
       subtotal: Number,
       discount: Number,
@@ -44,14 +91,19 @@ const orderSchema = new mongoose.Schema(
       total: Number
     },
 
+    // ================= DOCUMENTS =================
     documents: {
       shopImage: String,
+
       screenshot: String,
-      // 🔥 THE FIX: Added invoicePdf so Mongoose knows to save it!
-      invoicePdf: String 
+
+      // Invoice PDF
+      invoicePdf: String
     }
   },
-  { timestamps: true }
+  {
+    timestamps: true
+  }
 );
 
 module.exports = mongoose.model('Order', orderSchema);
