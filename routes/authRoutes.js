@@ -7,7 +7,9 @@ const router = express.Router();
 const allowedUsers = [
   { name: 'Shivram', email: 'maddylucky67@gmail.com', password: 'Shivram@DG2025' },
   { name: 'Hanish S.S', email: 'hanishgowda7795@gmail.com', password: 'Hanish@DG2025' },
-  { name: 'Kiran G.S', email: 'Kirangowdakiru0198@gmail.com', password: 'KiranGS@2025' }
+  { name: 'Kiran G.S', email: 'Kirangowdakiru0198@gmail.com', password: 'KiranGS@DG2025' }
+  { name: 'Ravi Kumar', email: 'ravikumar.pride@gmail.com', password: 'Ravikumar@DG2025' }
+
 ];
 
 // In-memory OTP store (Email -> OTP)

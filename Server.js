@@ -82,7 +82,8 @@ const deliveryAuthRoutes = require("./routes/deliveryAuth");
 const deliveryActionsRoutes = require("./routes/deliveryActions");
 const authRoutes = require("./routes/authRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
-
+const attendanceRoutes = require("./routes/attendanceRoutes");
+// const attendanceOtpRoutes = require("./routes/attendanceOtpRoutes");
 const { creditAllFunders } = require("./routes/funderRoutes");
 
 // ==========================================
@@ -100,6 +101,8 @@ app.use("/api/delivery", deliveryAuthRoutes);
 app.use("/api/delivery-actions", deliveryActionsRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/attendance", attendanceRoutes);
+// app.use("/api/attendance-otp", attendanceOtpRoutes);
 
 app.use("/api/admin/funders", withdrawalRoutes);
 app.use("/api/admin/funders", funderRoutes);
