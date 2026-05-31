@@ -15,7 +15,7 @@ const cron       = require("node-cron");
 
 const Employee      = require("../models/Employee");
 const Attendance    = require("../models/Attendance");
-const AttendanceOtp = require("../models/AttendanceOtp");
+const AttendanceOtp = require("../models/Attendanceotp");
 
 // ── Multer (selfie upload) ─────────────────────────────────────────────────
 const uploadDir = path.join(__dirname, "../uploads/selfies");
