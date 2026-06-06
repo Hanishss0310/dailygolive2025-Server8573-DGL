@@ -90,36 +90,42 @@ const DELIVERY_STATUS = {
 // ======================================================
 router.post('/login', (req, res) => {
   try {
+    console.log('================ LOGIN =================');
+    console.log('BODY:', req.body);
+
     const { name, password } = req.body;
 
-    if (!name || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Name and password are required',
-      });
-    }
+    console.log('NAME RECEIVED:', name);
+    console.log('PASSWORD RECEIVED:', password);
 
     const user = DELIVERY_AGENTS.find(
       (agent) =>
-        agent.name.toLowerCase().trim() ===
-        name.toLowerCase().trim()
+        agent.name.trim().toLowerCase() ===
+        String(name).trim().toLowerCase()
     );
+
+    console.log('FOUND USER:', user);
 
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'User not found',
+        receivedName: name,
       });
     }
+
+    console.log('EXPECTED PASSWORD:', user.password);
 
     if (user.password !== password) {
       return res.status(401).json({
         success: false,
         message: 'Invalid password',
+        expected: user.password,
+        received: password,
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: 'Login successful',
       user: {
@@ -129,8 +135,9 @@ router.post('/login', (req, res) => {
       },
     });
   } catch (error) {
-    console.error('POST /login error:', error);
-    res.status(500).json({
+    console.error('LOGIN ERROR:', error);
+
+    return res.status(500).json({
       success: false,
       message: 'Server error',
     });
