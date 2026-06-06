@@ -4,8 +4,8 @@ const employeeSchema = new mongoose.Schema(
   {
     employeeId: {
       type: String,
-      unique: true,
       required: true,
+      unique: true,
       trim: true,
     },
 
@@ -25,28 +25,27 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       required: true,
       unique: true,
-      lowercase: true,
       trim: true,
+      lowercase: true,
     },
 
-    // MULTIPLE POSITIONS
-    positions: [
-      {
-        type: String,
-        enum: [
-          "Founder",
-          "Manager",
-          "ASM",
-          "Team Lead",
-          "FOS",
-          "Delivery Team",
-        ],
-      },
-    ],
+    positions: {
+      type: [String],
+      enum: [
+        "Founder",
+        "Manager",
+        "ASM",
+        "Team Lead",
+        "FOS",
+        "Delivery Team",
+      ],
+      default: [],
+    },
 
     password: {
       type: String,
       required: true,
+      trim: true,
     },
 
     isActive: {

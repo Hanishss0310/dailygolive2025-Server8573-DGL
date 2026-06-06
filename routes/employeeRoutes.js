@@ -36,9 +36,15 @@ const generateEmployeeId = (
 // CREATE EMPLOYEE
 // ==========================================
 
-router.post("/create", async (req, res) => {
+// ==========================================
+// CREATE EMPLOYEE
+// ==========================================
 
+router.post("/create", async (req, res) => {
   try {
+    console.log("========== CREATE EMPLOYEE ==========");
+    console.log("BODY RECEIVED:");
+    console.log(JSON.stringify(req.body, null, 2));
 
     const {
       name,
@@ -48,23 +54,28 @@ router.post("/create", async (req, res) => {
       positions,
     } = req.body;
 
+    if (!name || !phone || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Name, phone, email and password are required",
+      });
+    }
+
     if (
-      !name ||
-      !phone ||
-      !email ||
-      !password
+      !positions ||
+      !Array.isArray(positions) ||
+      positions.length === 0
     ) {
       return res.status(400).json({
         success: false,
         message:
-          "All fields are required",
+          "At least one position must be selected",
       });
     }
 
     const existingEmployee =
-      await Employee.findOne({
-        email,
-      });
+      await Employee.findOne({ email });
 
     if (existingEmployee) {
       return res.status(400).json({
@@ -81,7 +92,7 @@ router.post("/create", async (req, res) => {
       );
 
     const employee =
-      new Employee({
+      await Employee.create({
         employeeId,
         name,
         phone,
@@ -90,9 +101,7 @@ router.post("/create", async (req, res) => {
         positions,
       });
 
-    await employee.save();
-
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message:
         "Employee Created Successfully",
@@ -101,7 +110,13 @@ router.post("/create", async (req, res) => {
 
   } catch (error) {
 
-    res.status(500).json({
+    console.error(
+      "EMPLOYEE CREATE ERROR"
+    );
+
+    console.error(error);
+
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
