@@ -5,31 +5,12 @@ const router = express.Router();
 const Employee = require("../models/Employee");
 
 // ==========================================
-// GENERATE PASSWORD
-// ==========================================
-const generatePassword = () => {
-
-  const chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#";
-
-  let password = "";
-
-  for (let i = 0; i < 10; i++) {
-
-    password += chars.charAt(
-      Math.floor(Math.random() * chars.length)
-    );
-  }
-
-  return password;
-};
-
-// ==========================================
 // GENERATE EMPLOYEE ID
 // ==========================================
+
 const generateEmployeeId = (
   name,
-  position
+  positions
 ) => {
 
   const random = Math.floor(
@@ -41,7 +22,10 @@ const generateEmployeeId = (
     .substring(0, 3)
     .toUpperCase();
 
-  const role = position
+  const primaryRole =
+    positions?.[0] || "EMP";
+
+  const role = primaryRole
     .substring(0, 3)
     .toUpperCase();
 
@@ -51,6 +35,7 @@ const generateEmployeeId = (
 // ==========================================
 // CREATE EMPLOYEE
 // ==========================================
+
 router.post("/create", async (req, res) => {
 
   try {
@@ -59,15 +44,29 @@ router.post("/create", async (req, res) => {
       name,
       phone,
       email,
-      position,
+      password,
+      positions,
     } = req.body;
 
-    // CHECK EXISTING EMAIL
+    if (
+      !name ||
+      !phone ||
+      !email ||
+      !password
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "All fields are required",
+      });
+    }
+
     const existingEmployee =
-      await Employee.findOne({ email });
+      await Employee.findOne({
+        email,
+      });
 
     if (existingEmployee) {
-
       return res.status(400).json({
         success: false,
         message:
@@ -75,26 +74,20 @@ router.post("/create", async (req, res) => {
       });
     }
 
-    // GENERATE PASSWORD
-    const password =
-      generatePassword();
-
-    // GENERATE EMPLOYEE ID
     const employeeId =
       generateEmployeeId(
         name,
-        position
+        positions
       );
 
-    // CREATE EMPLOYEE
     const employee =
       new Employee({
         employeeId,
         name,
         phone,
         email,
-        position,
         password,
+        positions,
       });
 
     await employee.save();
@@ -116,8 +109,9 @@ router.post("/create", async (req, res) => {
 });
 
 // ==========================================
-// LOGIN EMPLOYEE
+// EMPLOYEE LOGIN
 // ==========================================
+
 router.post("/login", async (req, res) => {
 
   try {
@@ -136,7 +130,6 @@ router.post("/login", async (req, res) => {
       });
 
     if (!employee) {
-
       return res.status(404).json({
         success: false,
         message:
@@ -144,12 +137,31 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // ONLY FOS & DELIVERY TEAM
-    if (
-      employee.position !== "FOS" &&
-      employee.position !== "Delivery Team"
-    ) {
+    // BACKWARD COMPATIBILITY
 
+    let employeeRoles =
+      employee.positions || [];
+
+    if (
+      employeeRoles.length === 0 &&
+      employee.position
+    ) {
+      employeeRoles = [
+        employee.position,
+      ];
+    }
+
+    const allowedRoles = [
+      "FOS",
+      "Delivery Team",
+    ];
+
+    const hasAccess =
+      employeeRoles.some((role) =>
+        allowedRoles.includes(role)
+      );
+
+    if (!hasAccess) {
       return res.status(403).json({
         success: false,
         message:
@@ -157,9 +169,9 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // PASSWORD CHECK
-    if (employee.password !== password) {
-
+    if (
+      employee.password !== password
+    ) {
       return res.status(401).json({
         success: false,
         message:
@@ -186,37 +198,14 @@ router.post("/login", async (req, res) => {
 // ==========================================
 // GET ALL EMPLOYEES
 // ==========================================
+
 router.get("/", async (req, res) => {
 
   try {
 
     const employees =
       await Employee.find()
-      .sort({ createdAt: -1 });
-
-    res.status(200).json(
-      employees
-    );
-
-  } catch (error) {
-
-    res.status(500).json({
-      message: error.message,
-    });
-  }
-});
-
-// ==========================================
-// GET ONLY ACTIVE EMPLOYEES
-// ==========================================
-router.get("/active", async (req, res) => {
-
-  try {
-
-    const employees =
-      await Employee.find({
-        isActive: true,
-      }).sort({
+      .sort({
         createdAt: -1,
       });
 
@@ -227,27 +216,90 @@ router.get("/active", async (req, res) => {
   } catch (error) {
 
     res.status(500).json({
+      success: false,
       message: error.message,
     });
   }
 });
 
 // ==========================================
+// GET ACTIVE EMPLOYEES
+// ==========================================
+
+router.get(
+  "/active",
+  async (req, res) => {
+
+    try {
+
+      const employees =
+        await Employee.find({
+          isActive: true,
+        }).sort({
+          createdAt: -1,
+        });
+
+      res.status(200).json(
+        employees
+      );
+
+    } catch (error) {
+
+      res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  }
+);
+
+// ==========================================
 // UPDATE EMPLOYEE
 // ==========================================
+
 router.put("/:id", async (req, res) => {
 
   try {
 
+    const {
+      name,
+      phone,
+      email,
+      password,
+      positions,
+      isActive,
+    } = req.body;
+
     const updatedEmployee =
       await Employee.findByIdAndUpdate(
         req.params.id,
-        req.body,
-        { new: true }
+        {
+          name,
+          phone,
+          email,
+          password,
+          positions,
+          isActive,
+        },
+        {
+          new: true,
+          runValidators: true,
+        }
       );
+
+    if (!updatedEmployee) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found",
+      });
+    }
 
     res.status(200).json({
       success: true,
+      message:
+        "Employee Updated Successfully",
       employee:
         updatedEmployee,
     });
@@ -255,6 +307,7 @@ router.put("/:id", async (req, res) => {
   } catch (error) {
 
     res.status(500).json({
+      success: false,
       message: error.message,
     });
   }
@@ -263,13 +316,23 @@ router.put("/:id", async (req, res) => {
 // ==========================================
 // DELETE EMPLOYEE
 // ==========================================
+
 router.delete("/:id", async (req, res) => {
 
   try {
 
-    await Employee.findByIdAndDelete(
-      req.params.id
-    );
+    const employee =
+      await Employee.findByIdAndDelete(
+        req.params.id
+      );
+
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Employee not found",
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -280,10 +343,10 @@ router.delete("/:id", async (req, res) => {
   } catch (error) {
 
     res.status(500).json({
+      success: false,
       message: error.message,
     });
   }
 });
 
 module.exports = router;
-

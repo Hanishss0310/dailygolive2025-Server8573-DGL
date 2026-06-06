@@ -6,29 +6,43 @@ const employeeSchema = new mongoose.Schema(
       type: String,
       unique: true,
       required: true,
+      trim: true,
     },
 
     name: {
       type: String,
       required: true,
+      trim: true,
     },
 
     phone: {
       type: String,
       required: true,
+      trim: true,
     },
 
     email: {
       type: String,
       required: true,
       unique: true,
+      lowercase: true,
+      trim: true,
     },
 
-    position: {
-      type: String,
-      enum: ["Founder", "Manager", "FOS", "Delivery Team"],
-      required: true,
-    },
+    // MULTIPLE POSITIONS
+    positions: [
+      {
+        type: String,
+        enum: [
+          "Founder",
+          "Manager",
+          "ASM",
+          "Team Lead",
+          "FOS",
+          "Delivery Team",
+        ],
+      },
+    ],
 
     password: {
       type: String,
@@ -40,7 +54,12 @@ const employeeSchema = new mongoose.Schema(
       default: true,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-module.exports = mongoose.model("Employee", employeeSchema);
+module.exports = mongoose.model(
+  "Employee",
+  employeeSchema
+);
