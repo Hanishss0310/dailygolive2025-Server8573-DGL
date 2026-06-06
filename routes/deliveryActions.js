@@ -88,15 +88,14 @@ const DELIVERY_STATUS = {
 // ======================================================
 // LOGIN
 // ======================================================
+// ======================================================
+// LOGIN (NAME ONLY)
+// ======================================================
 router.post('/login', (req, res) => {
   try {
-    console.log('================ LOGIN =================');
-    console.log('BODY:', req.body);
+    const { name } = req.body;
 
-    const { name, password } = req.body;
-
-    console.log('NAME RECEIVED:', name);
-    console.log('PASSWORD RECEIVED:', password);
+    console.log('LOGIN REQUEST:', req.body);
 
     const user = DELIVERY_AGENTS.find(
       (agent) =>
@@ -104,24 +103,10 @@ router.post('/login', (req, res) => {
         String(name).trim().toLowerCase()
     );
 
-    console.log('FOUND USER:', user);
-
     if (!user) {
       return res.status(401).json({
         success: false,
         message: 'User not found',
-        receivedName: name,
-      });
-    }
-
-    console.log('EXPECTED PASSWORD:', user.password);
-
-    if (user.password !== password) {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid password',
-        expected: user.password,
-        received: password,
       });
     }
 
@@ -140,28 +125,6 @@ router.post('/login', (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Server error',
-    });
-  }
-});
-
-// ======================================================
-// GET DELIVERY AGENTS
-// ======================================================
-router.get('/agents', (req, res) => {
-  try {
-    res.status(200).json({
-      success: true,
-      agents: DELIVERY_AGENTS.map((agent) => ({
-        name: agent.name,
-        email: agent.email,
-        phone: agent.phone,
-      })),
-    });
-  } catch (error) {
-    console.error('GET /agents error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch agents',
     });
   }
 });
