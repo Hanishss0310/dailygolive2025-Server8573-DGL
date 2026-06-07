@@ -5,27 +5,27 @@ const router = express.Router();
 // STATIC DELIVERY AGENTS
 // ======================================================
 const DELIVERY_AGENTS = [
-  { name: 'Pavan Kumar', email: 'pavan@dg.com', phone: '9000000001', password: 'PavanKumar@DG2026' },
-  { name: 'Kiran GS', email: 'kiran@dg.com', phone: '9000000002', password: 'KiranGS@DG2026' },
-  { name: 'Shivaraj', email: 'shivaraj@dg.com', phone: '9000000003', password: 'Shivaraj@DG2026' },
-  { name: 'Gnanesh', email: 'gnanesh@dg.com', phone: '9000000004', password: 'Gnanesh@DG2026' },
-  { name: 'Karan Singh', email: 'karan@dg.com', phone: '9000000005', password: 'KaranSingh@DG2026' },
-  { name: 'Kallu Singh', email: 'kallu@dg.com', phone: '9000000006', password: 'KalluSingh@DG2026' },
-  { name: 'Mahaveer', email: 'mahaveer@dg.com', phone: '9000000007', password: 'Mahaveer@DG2026' },
-  { name: 'Bhaskar L', email: 'bhaskar@dg.com', phone: '9000000008', password: 'BhaskarL@DG2026' },
-  { name: 'Ramesh Babu', email: 'ramesh@dg.com', phone: '9000000009', password: 'RameshBabu@DG2026' },
-  { name: 'Punith', email: 'punith@dg.com', phone: '9000000010', password: 'Punith@DG2026' },
-  { name: 'Testing - Fyntraxis', email: 'testing@dg.com', phone: '9000000011', password: 'Testing-Fyntraxis@DG2026' },
+  { name: 'Pavan Kumar',         email: 'pavan@dg.com',    phone: '9000000001', password: 'PavanKumar@DG2026' },
+  { name: 'Kiran GS',            email: 'kiran@dg.com',    phone: '9000000002', password: 'KiranGS@DG2026' },
+  { name: 'Shivaraj',            email: 'shivaraj@dg.com', phone: '9000000003', password: 'Shivaraj@DG2026' },
+  { name: 'Gnanesh',             email: 'gnanesh@dg.com',  phone: '9000000004', password: 'Gnanesh@DG2026' },
+  { name: 'Karan Singh',         email: 'karan@dg.com',    phone: '9000000005', password: 'KaranSingh@DG2026' },
+  { name: 'Kallu Singh',         email: 'kallu@dg.com',    phone: '9000000006', password: 'KalluSingh@DG2026' },
+  { name: 'Mahaveer',            email: 'mahaveer@dg.com', phone: '9000000007', password: 'Mahaveer@DG2026' },
+  { name: 'Bhaskar L',           email: 'bhaskar@dg.com',  phone: '9000000008', password: 'BhaskarL@DG2026' },
+  { name: 'Ramesh Babu',         email: 'ramesh@dg.com',   phone: '9000000009', password: 'RameshBabu@DG2026' },
+  { name: 'Punith',              email: 'punith@dg.com',   phone: '9000000010', password: 'Punith@DG2026' },
+  { name: 'Testing - Fyntraxis', email: 'testing@dg.com',  phone: '9000000011', password: 'Testing-Fyntraxis@DG2026' },
 ];
 
 // ======================================================
 // VALID DELIVERY STATUSES
 // ======================================================
 const DELIVERY_STATUS = {
-  FULL_PAID: 'Order Delivered Payment full done',
+  FULL_PAID:    'Order Delivered Payment full done',
   PARTIAL_PAID: 'Ordered deliver partiall payment',
-  FAILED: 'Delivery failed',
-  FAKE: 'Fake order placed',
+  FAILED:       'Delivery failed',
+  FAKE:         'Fake order placed',
 };
 
 // ======================================================
@@ -51,35 +51,53 @@ let MOCK_ORDERS = [
     totals: { total: 800 },
     payment: { status: 'due', paidAmount: 0, pendingAmount: 800 },
     createdAt: new Date().toISOString(),
-  }
+  },
 ];
 
 let MOCK_DELIVERY_HISTORY = [];
 
 // ======================================================
-// LOGIN (NAME ONLY)
+// LOGIN (NAME + PASSWORD)
 // ======================================================
 router.post('/login', (req, res) => {
   try {
-    const { name } = req.body;
-    
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Name is required' });
+    const { name, password } = req.body;
+
+    // ── Validate required fields ──────────────────────────
+    if (!name || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and password are required',
+      });
     }
 
+    // ── Find agent by name (case-insensitive) ─────────────
     const user = DELIVERY_AGENTS.find(
-      (agent) => agent.name.trim().toLowerCase() === String(name).trim().toLowerCase()
+      (agent) =>
+        agent.name.trim().toLowerCase() === String(name).trim().toLowerCase()
     );
 
     if (!user) {
-      return res.status(401).json({ success: false, message: 'User not found' });
+      return res.status(401).json({
+        success: false,
+        message: 'Agent not found. Please select a valid name.',
+      });
     }
 
+    // ── Validate password (exact match) ───────────────────
+    if (user.password !== String(password).trim()) {
+      return res.status(401).json({
+        success: false,
+        message: 'Incorrect password. Please try again.',
+      });
+    }
+
+    // ── Success ───────────────────────────────────────────
     return res.status(200).json({
       success: true,
       message: 'Login successful',
       user: {
-        name: user.name,
+        name:  user.name,
         email: user.email,
         phone: user.phone,
       },
@@ -102,25 +120,32 @@ router.get('/orders', (req, res) => {
     }
 
     let filteredOrders = MOCK_ORDERS.filter(
-      (order) => 
-        order.customerDetails?.fos && 
-        String(order.customerDetails.fos).toLowerCase() === String(fosName).toLowerCase()
+      (order) =>
+        order.customerDetails?.fos &&
+        String(order.customerDetails.fos).toLowerCase() ===
+          String(fosName).toLowerCase()
     );
 
     if (date) {
-      filteredOrders = filteredOrders.filter((order) => 
-        order.orderDate && order.orderDate.toLowerCase().includes(String(date).toLowerCase())
+      filteredOrders = filteredOrders.filter((order) =>
+        order.orderDate &&
+        order.orderDate.toLowerCase().includes(String(date).toLowerCase())
       );
     }
 
     if (status) {
       filteredOrders = filteredOrders.filter(
-        (order) => order.payment?.status && String(order.payment.status).toLowerCase() === String(status).toLowerCase()
+        (order) =>
+          order.payment?.status &&
+          String(order.payment.status).toLowerCase() ===
+            String(status).toLowerCase()
       );
     }
 
-    // Sort by createdAt descending securely
-    filteredOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    filteredOrders.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     res.status(200).json(filteredOrders);
   } catch (error) {
@@ -156,15 +181,16 @@ router.post('/update-status', (req, res) => {
       });
     }
 
-    // Ensure strict string matching for IDs
-    const existingOrderIndex = MOCK_ORDERS.findIndex((o) => String(o._id) === String(orderId));
+    const existingOrderIndex = MOCK_ORDERS.findIndex(
+      (o) => String(o._id) === String(orderId)
+    );
 
     if (existingOrderIndex === -1) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    const existingOrder = MOCK_ORDERS[existingOrderIndex];
-    const lockedStatuses = ['completed', 'cancelled', 'fake'];
+    const existingOrder   = MOCK_ORDERS[existingOrderIndex];
+    const lockedStatuses  = ['completed', 'cancelled', 'fake'];
 
     if (lockedStatuses.includes(existingOrder.payment?.status)) {
       return res.status(400).json({
@@ -173,15 +199,13 @@ router.post('/update-status', (req, res) => {
       });
     }
 
-    // Fallback securely to existing order totals if frontend omits them
-    const totalAmount = Number(existingOrder.totals?.total || totals?.total || 0);
-    const previousPaid = Number(existingOrder.payment?.paidAmount || 0);
-    const currentPaid = Number(paidNow || 0);
-    const newPaidTotal = previousPaid + currentPaid;
-    const pendingAmount = Math.max(totalAmount - newPaidTotal, 0);
+    const totalAmount    = Number(existingOrder.totals?.total || totals?.total || 0);
+    const previousPaid   = Number(existingOrder.payment?.paidAmount || 0);
+    const currentPaid    = Number(paidNow || 0);
+    const newPaidTotal   = previousPaid + currentPaid;
+    const pendingAmount  = Math.max(totalAmount - newPaidTotal, 0);
 
     let mappedStatus;
-
     switch (deliveryStatus) {
       case DELIVERY_STATUS.FULL_PAID:
         mappedStatus = 'completed';
@@ -197,30 +221,32 @@ router.post('/update-status', (req, res) => {
         break;
       default:
         if (newPaidTotal >= totalAmount && totalAmount > 0) mappedStatus = 'completed';
-        else if (newPaidTotal > 0) mappedStatus = 'partially_paid';
-        else mappedStatus = 'due';
+        else if (newPaidTotal > 0)                          mappedStatus = 'partially_paid';
+        else                                                mappedStatus = 'due';
     }
 
-    const isNonPaymentStatus = [DELIVERY_STATUS.FAILED, DELIVERY_STATUS.FAKE].includes(deliveryStatus);
+    const isNonPaymentStatus = [DELIVERY_STATUS.FAILED, DELIVERY_STATUS.FAKE].includes(
+      deliveryStatus
+    );
 
     const deliveryRecord = {
-      _id: 'del_' + Date.now() + Math.floor(Math.random() * 1000),
+      _id:             'del_' + Date.now() + Math.floor(Math.random() * 1000),
       originalOrderId: orderId,
-      invoiceNo: invoiceNo || existingOrder.invoiceNo,
-      orderDate: orderDate || existingOrder.orderDate,
+      invoiceNo:       invoiceNo      || existingOrder.invoiceNo,
+      orderDate:       orderDate      || existingOrder.orderDate,
       customerDetails: customerDetails || existingOrder.customerDetails,
-      items: items || existingOrder.items,
-      totals: totals || existingOrder.totals,
+      items:           items          || existingOrder.items,
+      totals:          totals         || existingOrder.totals,
       agentName,
       deliveryStatus,
       reason,
       paymentReceivedAt: paymentReceivedAt || (isNonPaymentStatus ? 'N/A' : ''),
-      handedOverTo: handedOverTo || (isNonPaymentStatus ? 'N/A' : ''),
-      paidNow: currentPaid,
-      totalPaid: newPaidTotal,
+      handedOverTo:      handedOverTo      || (isNonPaymentStatus ? 'N/A' : ''),
+      paidNow:           currentPaid,
+      totalPaid:         newPaidTotal,
       pendingAmount,
-      totalOrderAmount: totalAmount,
-      createdAt: new Date().toISOString()
+      totalOrderAmount:  totalAmount,
+      createdAt:         new Date().toISOString(),
     };
 
     MOCK_DELIVERY_HISTORY.push(deliveryRecord);
@@ -229,23 +255,23 @@ router.post('/update-status', (req, res) => {
       ...existingOrder,
       payment: {
         ...(existingOrder.payment || {}),
-        amountPaid: newPaidTotal,
-        balance: pendingAmount,
+        amountPaid:      newPaidTotal,
+        balance:         pendingAmount,
         totalAmount,
-        paidAmount: newPaidTotal,
+        paidAmount:      newPaidTotal,
         pendingAmount,
         lastPaymentDate: new Date().toISOString(),
-        status: mappedStatus,
+        status:          mappedStatus,
       },
       ...(mappedStatus === 'cancelled' && { deliveryStatus: 'Delivery failed' }),
-      ...(mappedStatus === 'fake' && { deliveryStatus: 'Fake order placed' }),
+      ...(mappedStatus === 'fake'      && { deliveryStatus: 'Fake order placed' }),
     };
 
     res.status(200).json({
-      success: true,
-      message: 'Delivery updated successfully',
+      success:       true,
+      message:       'Delivery updated successfully',
       paymentStatus: mappedStatus,
-      totalPaid: newPaidTotal,
+      totalPaid:     newPaidTotal,
       pendingAmount,
     });
   } catch (error) {
@@ -259,7 +285,9 @@ router.post('/update-status', (req, res) => {
 // ======================================================
 router.get('/history', (req, res) => {
   try {
-    const history = [...MOCK_DELIVERY_HISTORY].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const history = [...MOCK_DELIVERY_HISTORY].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
     res.status(200).json(history);
   } catch (error) {
     console.error('GET /history error:', error);
