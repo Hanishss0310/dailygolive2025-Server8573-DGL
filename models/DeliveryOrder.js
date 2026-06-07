@@ -2,35 +2,32 @@ const mongoose = require('mongoose');
 
 const deliveryOrderSchema = new mongoose.Schema(
   {
-    // ── Link to original order ──────────────────────────────────────────────
+    // ── Link to original order ─────────────────────────────────────────────
     originalOrderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Order',
       required: true,
     },
 
-    // ── Order snapshot (so history is self-contained) ───────────────────────
+    // ── Snapshot of order at time of delivery update ───────────────────────
     invoiceNo: {
       type: String,
       required: true,
     },
-
-    orderDate: String,
-
+    orderDate:       String,
     customerDetails: Object,
+    items:           Array,
+    totals:          Object,
 
-    items: Array,
-
-    totals: Object,
-
-    // ── Agent ───────────────────────────────────────────────────────────────
+    // ── Agent ──────────────────────────────────────────────────────────────
     agentName: {
       type: String,
       required: true,
     },
 
-    // ── Delivery status ─────────────────────────────────────────────────────
-    // IMPORTANT: these must exactly match the DS.* values sent by the frontend
+    // ── Delivery status ────────────────────────────────────────────────────
+    // Must exactly match DS.* constants in the frontend and the switch cases
+    // in delivery.route.js  (case-sensitive)
     deliveryStatus: {
       type: String,
       enum: [
@@ -43,48 +40,23 @@ const deliveryOrderSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ── Payment tracking ────────────────────────────────────────────────────
-    paidNow: {
-      type: Number,
-      default: 0,
-    },
+    // ── Payment tracking ───────────────────────────────────────────────────
+    paidNow:          { type: Number, default: 0 },   // collected in this update
+    totalPaid:        { type: Number, default: 0 },   // cumulative paid so far
+    pendingAmount:    { type: Number, default: 0 },   // remaining balance
+    totalOrderAmount: { type: Number, default: 0 },   // order total snapshot
 
-    totalPaid: {
-      type: Number,
-      default: 0,
-    },
-
-    pendingAmount: {
-      type: Number,
-      default: 0,
-    },
-
-    totalOrderAmount: {
-      type: Number,
-      default: 0,
-    },
-
-    // ── Remarks / audit ─────────────────────────────────────────────────────
-    reason: {
-      type: String,
-      required: true,
-    },
-
-    paymentReceivedAt: {
-      type: String,
-      default: '',
-    },
-
-    handedOverTo: {
-      type: String,
-      default: '',
-    },
+    // ── Audit fields ───────────────────────────────────────────────────────
+    reason:            { type: String, required: true },
+    paymentReceivedAt: { type: String, default: '' },  // 'N/A' for non-payment
+    handedOverTo:      { type: String, default: '' },  // 'N/A' for non-payment
   },
   { timestamps: true }
 );
 
-// Index for fast agent + date queries
 deliveryOrderSchema.index({ agentName: 1, createdAt: -1 });
 deliveryOrderSchema.index({ originalOrderId: 1 });
+deliveryOrderSchema.index({ invoiceNo: 1 });
 
 module.exports = mongoose.model('DeliveryOrder', deliveryOrderSchema);
+MODELFILE
