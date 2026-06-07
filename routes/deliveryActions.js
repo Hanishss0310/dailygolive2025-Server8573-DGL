@@ -1,96 +1,99 @@
 const express = require('express');
 const router = express.Router();
-const DeliveryOrder = require('../models/DeliveryOrder');
-const Order = require('../models/Order');
 
 // ======================================================
-// DELIVERY AGENTS — single source of truth
+// STATIC DELIVERY AGENTS
 // ======================================================
 const DELIVERY_AGENTS = [
-  { name: 'Pavan Kumar',         email: 'pavan@dg.com',    phone: '9000000001', password: 'PavanKumar@DG2026'         },
-  { name: 'Kiran GS',            email: 'kiran@dg.com',    phone: '9000000002', password: 'KiranGS@DG2026'            },
-  { name: 'Shivaraj',            email: 'shivaraj@dg.com', phone: '9000000003', password: 'Shivaraj@DG2026'           },
-  { name: 'Gnanesh',             email: 'gnanesh@dg.com',  phone: '9000000004', password: 'Gnanesh@DG2026'            },
-  { name: 'Karan Singh',         email: 'karan@dg.com',    phone: '9000000005', password: 'KaranSingh@DG2026'         },
-  { name: 'Kallu Singh',         email: 'kallu@dg.com',    phone: '9000000006', password: 'KalluSingh@DG2026'         },
-  { name: 'Mahaveer',            email: 'mahaveer@dg.com', phone: '9000000007', password: 'Mahaveer@DG2026'           },
-  { name: 'Bhaskar L',           email: 'bhaskar@dg.com',  phone: '9000000008', password: 'BhaskarL@DG2026'           },
-  { name: 'Ramesh Babu',         email: 'ramesh@dg.com',   phone: '9000000009', password: 'RameshBabu@DG2026'         },
-  { name: 'Punith',              email: 'punith@dg.com',   phone: '9000000010', password: 'Punith@DG2026'             },
-  { name: 'Testing - Fyntraxis', email: 'testing@dg.com',  phone: '9000000011', password: 'Testing-Fyntraxis@DG2026'  },
+  { name: 'Pavan Kumar', email: 'pavan@dg.com', phone: '9000000001', password: 'PavanKumar@DG2026' },
+  { name: 'Kiran GS', email: 'kiran@dg.com', phone: '9000000002', password: 'KiranGS@DG2026' },
+  { name: 'Shivaraj', email: 'shivaraj@dg.com', phone: '9000000003', password: 'Shivaraj@DG2026' },
+  { name: 'Gnanesh', email: 'gnanesh@dg.com', phone: '9000000004', password: 'Gnanesh@DG2026' },
+  { name: 'Karan Singh', email: 'karan@dg.com', phone: '9000000005', password: 'KaranSingh@DG2026' },
+  { name: 'Kallu Singh', email: 'kallu@dg.com', phone: '9000000006', password: 'KalluSingh@DG2026' },
+  { name: 'Mahaveer', email: 'mahaveer@dg.com', phone: '9000000007', password: 'Mahaveer@DG2026' },
+  { name: 'Bhaskar L', email: 'bhaskar@dg.com', phone: '9000000008', password: 'BhaskarL@DG2026' },
+  { name: 'Ramesh Babu', email: 'ramesh@dg.com', phone: '9000000009', password: 'RameshBabu@DG2026' },
+  { name: 'Punith', email: 'punith@dg.com', phone: '9000000010', password: 'Punith@DG2026' },
+  { name: 'Testing - Fyntraxis', email: 'testing@dg.com', phone: '9000000011', password: 'Testing-Fyntraxis@DG2026' },
 ];
 
 // ======================================================
-// STATUS MAPPING
-// These exact strings must match DS.* in the frontend
-// and the enum in DeliveryOrder.model.js
+// VALID DELIVERY STATUSES
 // ======================================================
-function mapDeliveryStatusToPaymentStatus(deliveryStatus, newPaidTotal, totalAmount) {
-  switch (deliveryStatus) {
-    case 'Order Delivered Payment Full Done':
-      return 'completed';
-    case 'Order Delivered Payment Full Not Done':
-      return 'due';
-    case 'Order Delivered Partial Payment':
-      return newPaidTotal >= totalAmount && totalAmount > 0 ? 'completed' : 'partially_paid';
-    case 'Delivery Failed':
-      return 'cancelled';
-    case 'Fake Order Placed':
-      return 'fake';
-    default:
-      if (newPaidTotal >= totalAmount && totalAmount > 0) return 'completed';
-      if (newPaidTotal > 0) return 'partially_paid';
-      return 'due';
+const DELIVERY_STATUS = {
+  FULL_PAID: 'Order Delivered Payment full done',
+  PARTIAL_PAID: 'Ordered deliver partiall payment',
+  FAILED: 'Delivery failed',
+  FAKE: 'Fake order placed',
+};
+
+// ======================================================
+// IN-MEMORY DATA STORES
+// ======================================================
+let MOCK_ORDERS = [
+  {
+    _id: 'order_1',
+    invoiceNo: 'INV-1001',
+    orderDate: '2026-06-06',
+    customerDetails: { fos: 'Pavan Kumar', name: 'John Doe', phone: '1234567890' },
+    items: [{ name: 'Sample Item A', qty: 1 }],
+    totals: { total: 1500 },
+    payment: { status: 'due', paidAmount: 0, pendingAmount: 1500 },
+    createdAt: new Date().toISOString(),
+  },
+  {
+    _id: 'order_2',
+    invoiceNo: 'INV-1002',
+    orderDate: '2026-06-06',
+    customerDetails: { fos: 'Kiran GS', name: 'Jane Smith', phone: '0987654321' },
+    items: [{ name: 'Sample Item B', qty: 2 }],
+    totals: { total: 800 },
+    payment: { status: 'due', paidAmount: 0, pendingAmount: 800 },
+    createdAt: new Date().toISOString(),
   }
-}
+];
 
-const NON_PAYMENT_STATUSES = ['Delivery Failed', 'Fake Order Placed'];
+let MOCK_DELIVERY_HISTORY = [];
 
 // ======================================================
-// POST /login
-// Validates name + password, returns agent info
+// LOGIN (NAME ONLY)
 // ======================================================
 router.post('/login', (req, res) => {
   try {
-    const { name, password } = req.body;
-
-    if (!name || !password) {
-      return res.status(400).json({ success: false, message: 'Name and password are required' });
+    const { name } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Name is required' });
     }
 
-    const agent = DELIVERY_AGENTS.find(
-      a => a.name.trim().toLowerCase() === String(name).trim().toLowerCase()
+    const user = DELIVERY_AGENTS.find(
+      (agent) => agent.name.trim().toLowerCase() === String(name).trim().toLowerCase()
     );
 
-    if (!agent) {
-      return res.status(401).json({ success: false, message: 'Agent not found' });
-    }
-
-    if (agent.password !== String(password).trim()) {
-      return res.status(401).json({ success: false, message: 'Incorrect password' });
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not found' });
     }
 
     return res.status(200).json({
       success: true,
       message: 'Login successful',
       user: {
-        name:  agent.name,
-        email: agent.email,
-        phone: agent.phone,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
       },
     });
-  } catch (err) {
-    console.error('LOGIN ERROR:', err);
+  } catch (error) {
+    console.error('LOGIN ERROR:', error);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 
 // ======================================================
-// GET /orders
-// Returns all orders assigned to the logged-in agent.
-// Supports optional ?date=YYYY-MM-DD and ?status=xxx
+// GET ORDERS FOR DELIVERY APP
 // ======================================================
-router.get('/orders', async (req, res) => {
+router.get('/orders', (req, res) => {
   try {
     const { fosName, date, status } = req.query;
 
@@ -98,41 +101,38 @@ router.get('/orders', async (req, res) => {
       return res.status(400).json({ success: false, error: 'fosName is required' });
     }
 
-    // Escape special regex characters in the agent name
-    const escapedName = fosName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    // Match whichever field your Order schema uses for agent assignment.
-    // Add or remove $or arms to match your actual schema.
-    const query = {
-      $or: [
-        { 'customerDetails.fos':     { $regex: new RegExp(`^${escapedName}$`, 'i') } },
-        { 'customerDetails.fosName': { $regex: new RegExp(`^${escapedName}$`, 'i') } },
-        { 'assignedTo':              { $regex: new RegExp(`^${escapedName}$`, 'i') } },
-        { 'agentName':               { $regex: new RegExp(`^${escapedName}$`, 'i') } },
-      ],
-    };
+    let filteredOrders = MOCK_ORDERS.filter(
+      (order) => 
+        order.customerDetails?.fos && 
+        String(order.customerDetails.fos).toLowerCase() === String(fosName).toLowerCase()
+    );
 
     if (date) {
-      query.orderDate = { $regex: new RegExp(date.trim(), 'i') };
+      filteredOrders = filteredOrders.filter((order) => 
+        order.orderDate && order.orderDate.toLowerCase().includes(String(date).toLowerCase())
+      );
     }
 
     if (status) {
-      query['payment.status'] = status.trim().toLowerCase();
+      filteredOrders = filteredOrders.filter(
+        (order) => order.payment?.status && String(order.payment.status).toLowerCase() === String(status).toLowerCase()
+      );
     }
 
-    const orders = await Order.find(query).sort({ createdAt: -1 }).lean();
-    return res.status(200).json(orders);
-  } catch (err) {
-    console.error('GET /orders error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to fetch orders' });
+    // Sort by createdAt descending securely
+    filteredOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.status(200).json(filteredOrders);
+  } catch (error) {
+    console.error('GET /orders error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch orders' });
   }
 });
 
 // ======================================================
-// POST /update-status
-// Updates an order's delivery + payment status
+// UPDATE DELIVERY STATUS
 // ======================================================
-router.post('/update-status', async (req, res) => {
+router.post('/update-status', (req, res) => {
   try {
     const {
       orderId,
@@ -156,101 +156,114 @@ router.post('/update-status', async (req, res) => {
       });
     }
 
-    const existingOrder = await Order.findById(orderId);
-    if (!existingOrder) {
+    // Ensure strict string matching for IDs
+    const existingOrderIndex = MOCK_ORDERS.findIndex((o) => String(o._id) === String(orderId));
+
+    if (existingOrderIndex === -1) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    // Prevent updating already-locked orders
+    const existingOrder = MOCK_ORDERS[existingOrderIndex];
     const lockedStatuses = ['completed', 'cancelled', 'fake'];
+
     if (lockedStatuses.includes(existingOrder.payment?.status)) {
       return res.status(400).json({
         success: false,
-        message: `Order is already marked as "${existingOrder.payment.status}" and cannot be updated.`,
+        message: `Order already marked as "${existingOrder.payment.status}"`,
       });
     }
 
-    // Amount calculations
-    const isNonPayment  = NON_PAYMENT_STATUSES.includes(deliveryStatus);
-    const totalAmount   = Number(existingOrder.totals?.total || totals?.total || 0);
-    const previousPaid  = Number(existingOrder.payment?.paidAmount || 0);
-    const currentPaid   = isNonPayment ? 0 : Math.max(0, Number(paidNow || 0));
-    const newPaidTotal  = previousPaid + currentPaid;
+    // Fallback securely to existing order totals if frontend omits them
+    const totalAmount = Number(existingOrder.totals?.total || totals?.total || 0);
+    const previousPaid = Number(existingOrder.payment?.paidAmount || 0);
+    const currentPaid = Number(paidNow || 0);
+    const newPaidTotal = previousPaid + currentPaid;
     const pendingAmount = Math.max(totalAmount - newPaidTotal, 0);
 
-    const mappedStatus = mapDeliveryStatusToPaymentStatus(deliveryStatus, newPaidTotal, totalAmount);
+    let mappedStatus;
 
-    // Save delivery history record
-    await new DeliveryOrder({
-      originalOrderId:   orderId,
-      invoiceNo:         invoiceNo         || existingOrder.invoiceNo,
-      orderDate:         orderDate         || existingOrder.orderDate,
-      customerDetails:   customerDetails   || existingOrder.customerDetails,
-      items:             items             || existingOrder.items,
-      totals:            totals            || existingOrder.totals,
+    switch (deliveryStatus) {
+      case DELIVERY_STATUS.FULL_PAID:
+        mappedStatus = 'completed';
+        break;
+      case DELIVERY_STATUS.PARTIAL_PAID:
+        mappedStatus = newPaidTotal >= totalAmount ? 'completed' : 'partially_paid';
+        break;
+      case DELIVERY_STATUS.FAILED:
+        mappedStatus = 'cancelled';
+        break;
+      case DELIVERY_STATUS.FAKE:
+        mappedStatus = 'fake';
+        break;
+      default:
+        if (newPaidTotal >= totalAmount && totalAmount > 0) mappedStatus = 'completed';
+        else if (newPaidTotal > 0) mappedStatus = 'partially_paid';
+        else mappedStatus = 'due';
+    }
+
+    const isNonPaymentStatus = [DELIVERY_STATUS.FAILED, DELIVERY_STATUS.FAKE].includes(deliveryStatus);
+
+    const deliveryRecord = {
+      _id: 'del_' + Date.now() + Math.floor(Math.random() * 1000),
+      originalOrderId: orderId,
+      invoiceNo: invoiceNo || existingOrder.invoiceNo,
+      orderDate: orderDate || existingOrder.orderDate,
+      customerDetails: customerDetails || existingOrder.customerDetails,
+      items: items || existingOrder.items,
+      totals: totals || existingOrder.totals,
       agentName,
       deliveryStatus,
       reason,
-      paymentReceivedAt: isNonPayment ? 'N/A' : (paymentReceivedAt || ''),
-      handedOverTo:      isNonPayment ? 'N/A' : (handedOverTo      || ''),
-      paidNow:           currentPaid,
-      totalPaid:         newPaidTotal,
+      paymentReceivedAt: paymentReceivedAt || (isNonPaymentStatus ? 'N/A' : ''),
+      handedOverTo: handedOverTo || (isNonPaymentStatus ? 'N/A' : ''),
+      paidNow: currentPaid,
+      totalPaid: newPaidTotal,
       pendingAmount,
-      totalOrderAmount:  totalAmount,
-    }).save();
-
-    // Patch the original Order
-    const prevPayment = existingOrder.payment?.toObject
-      ? existingOrder.payment.toObject()
-      : { ...(existingOrder.payment || {}) };
-
-    existingOrder.payment = {
-      ...prevPayment,
-      status:          mappedStatus,
-      paidAmount:      newPaidTotal,
-      pendingAmount,
-      totalAmount,
-      lastPaymentDate: new Date().toISOString(),
+      totalOrderAmount: totalAmount,
+      createdAt: new Date().toISOString()
     };
-    existingOrder.deliveryStatus = deliveryStatus;
 
-    await existingOrder.save();
+    MOCK_DELIVERY_HISTORY.push(deliveryRecord);
 
-    return res.status(200).json({
-      success:       true,
-      message:       'Delivery updated successfully',
+    MOCK_ORDERS[existingOrderIndex] = {
+      ...existingOrder,
+      payment: {
+        ...(existingOrder.payment || {}),
+        amountPaid: newPaidTotal,
+        balance: pendingAmount,
+        totalAmount,
+        paidAmount: newPaidTotal,
+        pendingAmount,
+        lastPaymentDate: new Date().toISOString(),
+        status: mappedStatus,
+      },
+      ...(mappedStatus === 'cancelled' && { deliveryStatus: 'Delivery failed' }),
+      ...(mappedStatus === 'fake' && { deliveryStatus: 'Fake order placed' }),
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'Delivery updated successfully',
       paymentStatus: mappedStatus,
-      totalPaid:     newPaidTotal,
+      totalPaid: newPaidTotal,
       pendingAmount,
     });
-  } catch (err) {
-    console.error('POST /update-status error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to update delivery status' });
+  } catch (error) {
+    console.error('POST /update-status error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update delivery' });
   }
 });
 
 // ======================================================
-// GET /history
-// Returns delivery history records
+// DELIVERY HISTORY
 // ======================================================
-router.get('/history', async (req, res) => {
+router.get('/history', (req, res) => {
   try {
-    const { agentName, invoiceNo } = req.query;
-    const query = {};
-
-    if (agentName) {
-      const escaped = agentName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.agentName = { $regex: new RegExp(`^${escaped}$`, 'i') };
-    }
-    if (invoiceNo) {
-      query.invoiceNo = invoiceNo.trim();
-    }
-
-    const history = await DeliveryOrder.find(query).sort({ createdAt: -1 }).lean();
-    return res.status(200).json(history);
-  } catch (err) {
-    console.error('GET /history error:', err);
-    return res.status(500).json({ success: false, error: 'Failed to fetch delivery history' });
+    const history = [...MOCK_DELIVERY_HISTORY].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    res.status(200).json(history);
+  } catch (error) {
+    console.error('GET /history error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch delivery history' });
   }
 });
 
